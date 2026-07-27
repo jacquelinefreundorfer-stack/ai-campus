@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "~/db/index";
-import { bundles, modules, lessons, quizzes, quizQuestions, users, enrollments, lessonProgress, quizAttempts } from "~/db/schema";
+import { bundles, modules, lessons, quizzes, quizQuestions, users, enrollments, lessonProgress, quizAttempts, certificates } from "~/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 
 // ── Get all published bundles ────────────────────────────────────────────────
 
@@ -244,17 +245,19 @@ export const markLessonComplete = createServerFn()
         .update(lessonProgress)
         .set({ completed: true, completedAt: new Date() })
         .where(eq(lessonProgress.id, existing.id));
-      return { success: true };
+    } else {
+      await d.insert(lessonProgress).values({
+        enrollmentId: data.enrollmentId,
+        lessonId: data.lessonId,
+        completed: true,
+        completedAt: new Date(),
+      });
     }
 
-    await d.insert(lessonProgress).values({
-      enrollmentId: data.enrollmentId,
-      lessonId: data.lessonId,
-      completed: true,
-      completedAt: new Date(),
-    });
+    // Check if certificate should be issued
+    const certResult = await checkAndIssueCertificateInternal(d, data.enrollmentId);
 
-    return { success: true };
+    return { success: true, certificateIssued: certResult?.issued ?? false };
   });
 
 // ── Submit quiz attempt ──────────────────────────────────────────────────────
@@ -297,7 +300,10 @@ export const submitQuiz = createServerFn()
       passed,
     });
 
-    return { score, passed, total: questions.length, correct, results };
+    // Check if certificate should be issued
+    const certResult = await checkAndIssueCertificateInternal(d, data.enrollmentId);
+
+    return { score, passed, total: questions.length, correct, results, certificateIssued: certResult?.issued ?? false };
   });
 
 // ── Get all modules for a bundle ─────────────────────────────────────────────
@@ -331,4 +337,195 @@ export const getBundleModules = createServerFn()
     }
 
     return result;
+  });
+
+// ── Get lesson progress ──────────────────────────────────────────────────────
+
+export const getLessonProgress = createServerFn()
+  .validator((enrollmentId: number) => enrollmentId)
+  .handler(async ({ data: enrollmentId }) => {
+    const d = db();
+    const progress = await d
+      .select()
+      .from(lessonProgress)
+      .where(eq(lessonProgress.enrollmentId, enrollmentId));
+    return progress.map((p) => ({
+      ...p,
+      completedAt: p.completedAt ? String(p.completedAt) : null,
+    }));
+  });
+
+// ── Certificate: internal check-and-issue logic ──────────────────────────────
+
+async function checkAndIssueCertificateInternal(
+  d: ReturnType<typeof db>,
+  enrollmentId: number,
+): Promise<{ issued: boolean; certificate?: any } | null> {
+  // Get enrollment
+  const [enr] = await d.select().from(enrollments).where(eq(enrollments.id, enrollmentId));
+  if (!enr) return null;
+
+  // Check if certificate already exists
+  const [existingCert] = await d
+    .select()
+    .from(certificates)
+    .where(eq(certificates.enrollmentId, enrollmentId));
+  if (existingCert) {
+    return { issued: false, certificate: existingCert };
+  }
+
+  // Get bundle
+  const [bundle] = await d.select().from(bundles).where(eq(bundles.id, enr.bundleId));
+  if (!bundle) return null;
+
+  // Get user
+  const [user] = await d.select().from(users).where(eq(users.id, enr.userId));
+  if (!user) return null;
+
+  // Get all modules for this bundle
+  const mods = await d
+    .select()
+    .from(modules)
+    .where(eq(modules.bundleId, enr.bundleId));
+
+  // Get all lessons across all modules
+  let allLessons: typeof lessons.$inferSelect[] = [];
+  for (const m of mods) {
+    const ls = await d.select().from(lessons).where(eq(lessons.moduleId, m.id));
+    allLessons = [...allLessons, ...ls];
+  }
+
+  const totalLessons = allLessons.length;
+  if (totalLessons === 0) return null;
+
+  // Check all lessons are completed
+  const progress = await d
+    .select()
+    .from(lessonProgress)
+    .where(eq(lessonProgress.enrollmentId, enrollmentId));
+  const completedLessonIds = new Set(progress.filter((p) => p.completed).map((p) => p.lessonId));
+
+  const allLessonsComplete = allLessons.every((l) => completedLessonIds.has(l.id));
+  if (!allLessonsComplete) return { issued: false };
+
+  // Get all quizzes and check they're passed
+  let allQuizzes: typeof quizzes.$inferSelect[] = [];
+  for (const m of mods) {
+    const qs = await d.select().from(quizzes).where(eq(quizzes.moduleId, m.id));
+    allQuizzes = [...allQuizzes, ...qs];
+  }
+
+  // Get all quiz attempts for this enrollment
+  const attempts = await d
+    .select()
+    .from(quizAttempts)
+    .where(eq(quizAttempts.enrollmentId, enrollmentId));
+
+  // For each quiz, verify there's at least one passed attempt
+  const allQuizzesPassed = allQuizzes.every((q) => {
+    return attempts.some((a) => a.quizId === q.id && a.passed);
+  });
+
+  if (!allQuizzesPassed) return { issued: false };
+
+  // All requirements met — issue certificate
+  const verificationCode = uuidv4();
+
+  // Build competencies list from module titles
+  const competencies = mods.map((m) => m.title);
+
+  const metadata = {
+    bundleTitle: bundle.title,
+    studentName: user.name || user.email,
+    modulesCompleted: mods.length,
+    hours: bundle.hours,
+    competencies,
+    school: bundle.school,
+  };
+
+  const [cert] = await d
+    .insert(certificates)
+    .values({
+      enrollmentId,
+      userId: enr.userId,
+      bundleId: enr.bundleId,
+      issuedAt: new Date(),
+      verificationCode,
+      metadata,
+    })
+    .returning();
+
+  // Update enrollment completedAt
+  await d
+    .update(enrollments)
+    .set({ completedAt: new Date(), status: "completed" })
+    .where(eq(enrollments.id, enrollmentId));
+
+  return {
+    issued: true,
+    certificate: {
+      ...cert,
+      issuedAt: String(cert.issuedAt),
+    },
+  };
+}
+
+// ── Check and issue certificate (public server function) ─────────────────────
+
+export const checkAndIssueCertificate = createServerFn()
+  .validator((enrollmentId: number) => enrollmentId)
+  .handler(async ({ data: enrollmentId }) => {
+    const d = db();
+    return await checkAndIssueCertificateInternal(d, enrollmentId);
+  });
+
+// ── Get certificate for enrollment ───────────────────────────────────────────
+
+export const getCertificate = createServerFn()
+  .validator((enrollmentId: number) => enrollmentId)
+  .handler(async ({ data: enrollmentId }) => {
+    const d = db();
+    const [cert] = await d
+      .select()
+      .from(certificates)
+      .where(eq(certificates.enrollmentId, enrollmentId));
+
+    if (!cert) return null;
+
+    // Get user for name
+    const [user] = await d.select().from(users).where(eq(users.id, cert.userId));
+    const [bundle] = await d.select().from(bundles).where(eq(bundles.id, cert.bundleId));
+
+    return {
+      ...cert,
+      issuedAt: String(cert.issuedAt),
+      metadata: cert.metadata as any,
+      user: user ? { ...user, createdAt: String(user.createdAt) } : null,
+      bundle: bundle ? { ...bundle, createdAt: String(bundle.createdAt) } : null,
+    };
+  });
+
+// ── Get certificate by verification code (public) ────────────────────────────
+
+export const getCertificateByCode = createServerFn()
+  .validator((code: string) => code)
+  .handler(async ({ data: code }) => {
+    const d = db();
+    const [cert] = await d
+      .select()
+      .from(certificates)
+      .where(eq(certificates.verificationCode, code));
+
+    if (!cert) return null;
+
+    const [user] = await d.select().from(users).where(eq(users.id, cert.userId));
+    const [bundle] = await d.select().from(bundles).where(eq(bundles.id, cert.bundleId));
+
+    return {
+      ...cert,
+      issuedAt: String(cert.issuedAt),
+      metadata: cert.metadata as any,
+      user: user ? { name: user.name, email: user.email } : null,
+      bundle: bundle ? { title: bundle.title } : null,
+    };
   });

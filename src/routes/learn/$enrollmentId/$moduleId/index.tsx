@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getEnrollment, getModuleWithLessons, markLessonComplete } from "~/lib/server";
 import { useState, useEffect } from "react";
-
 export const Route = createFileRoute("/learn/$enrollmentId/$moduleId/")({
   component: LessonPlayerPage,
   loader: async ({ params }) => {
@@ -15,7 +14,6 @@ export const Route = createFileRoute("/learn/$enrollmentId/$moduleId/")({
     return { enrollment, moduleData };
   },
 });
-
 function renderInline(text: string): React.ReactNode {
   let t = text;
   t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
@@ -31,13 +29,11 @@ function renderInline(text: string): React.ReactNode {
     return <span key={i}>{part}</span>;
   });
 }
-
 function renderMarkdown(content: string | null): React.ReactNode {
   if (!content) return <p className="text-gray-500 italic">No content available.</p>;
   const lines = content.split("\n");
   const elements: React.ReactNode[] = [];
   let i = 0, key = 0;
-
   while (i < lines.length) {
     const line = lines[i];
     if (line.startsWith("# ")) { elements.push(<h1 key={key++} className="font-serif text-3xl font-bold text-navy mt-8 mb-4">{line.slice(2)}</h1>); i++; }
@@ -76,35 +72,32 @@ function renderMarkdown(content: string | null): React.ReactNode {
   }
   return <div className="prose max-w-none">{elements}</div>;
 }
-
 function LessonPlayerPage() {
   const { enrollment, moduleData } = Route.useLoaderData();
   const [activeLessonId, setActiveLessonId] = useState<number | null>(moduleData.lessons[0]?.id ?? null);
   const [completedLessons, setCompletedLessons] = useState<Set<number>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
+  const [certificateIssued, setCertificateIssued] = useState(false);
   useEffect(() => {
     setCompletedLessons(new Set(enrollment.progress.filter((p: any) => p.completed).map((p: any) => p.lessonId)));
   }, [enrollment.progress]);
-
   const activeLesson = moduleData.lessons.find((l: any) => l.id === activeLessonId);
-
   const handleMarkComplete = async () => {
     if (!activeLessonId || completedLessons.has(activeLessonId)) return;
-    await markLessonComplete({ data: { enrollmentId: enrollment.id, lessonId: activeLessonId } });
+    const result = await markLessonComplete({ data: { enrollmentId: enrollment.id, lessonId: activeLessonId } });
     setCompletedLessons((prev) => new Set([...prev, activeLessonId]));
+    if (result.certificateIssued) {
+      setCertificateIssued(true);
+    }
   };
-
   const allLessonIds = enrollment.modules.flatMap((m: any) => m.lessons.map((l: any) => l.id));
   const totalLessons = allLessonIds.length;
   const completedCount = allLessonIds.filter((id: number) => completedLessons.has(id)).length;
   const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
-
   const currentLessonIndex = moduleData.lessons.findIndex((l: any) => l.id === activeLessonId);
   const prevLesson = currentLessonIndex > 0 ? moduleData.lessons[currentLessonIndex - 1] : null;
   const nextLesson = currentLessonIndex < moduleData.lessons.length - 1 ? moduleData.lessons[currentLessonIndex + 1] : null;
   const moduleQuiz = enrollment.modules.find((m: any) => m.id === moduleData.id && m.quizId);
-
   return (
     <div className="min-h-dvh bg-cream">
       <div className="bg-navy px-4 py-3 flex items-center justify-between text-white">
@@ -115,10 +108,34 @@ function LessonPlayerPage() {
           <span className="font-serif text-sm font-semibold truncate max-w-[200px]">{enrollment.bundle.title}</span>
         </div>
         <div className="flex items-center gap-4">
+          <Link to="/certificate/$enrollmentId" params={{ enrollmentId: String(enrollment.id) }} className="text-xs text-gold/80 hover:text-gold hidden sm:inline">Certificate</Link>
           <span className="text-xs text-gray-400">{progressPercent}% complete</span>
           <div className="w-24 h-1.5 bg-white/20 rounded-full overflow-hidden"><div className="h-full bg-gold rounded-full transition-all" style={{ width: `${progressPercent}%` }} /></div>
         </div>
       </div>
+
+      {/* Certificate issued notification */}
+      {certificateIssued && (
+        <div className="bg-green-50 border-b border-green-200 px-6 py-4">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎓</span>
+              <div>
+                <p className="font-serif text-lg font-bold text-green-800">Certificate Issued!</p>
+                <p className="text-sm text-green-700">Congratulations! You have completed all requirements.</p>
+              </div>
+            </div>
+            <Link
+              to="/certificate/$enrollmentId"
+              params={{ enrollmentId: String(enrollment.id) }}
+              className="inline-flex items-center gap-2 rounded-sm bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-all whitespace-nowrap"
+            >
+              View Certificate
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="flex">
         <aside className={`${sidebarOpen ? "block" : "hidden"} lg:block fixed lg:relative z-20 top-0 left-0 h-full lg:h-auto w-72 bg-white border-r border-gray-200 overflow-y-auto pt-14 lg:pt-0`}>
           <div className="p-4">
