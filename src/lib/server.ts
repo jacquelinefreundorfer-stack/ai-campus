@@ -3,6 +3,24 @@ import { db } from "~/db/index";
 import { bundles, modules, lessons, quizzes, quizQuestions, users, enrollments, lessonProgress, quizAttempts, certificates } from "~/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import { auth } from "~/lib/auth";
+
+// ── Auth helper: get current user from request (for server functions) ────────
+
+async function getCurrentUserId(): Promise<string | null> {
+  try {
+    // Use process-level storage — server functions run in the same request context
+    const { getWebRequest } = await import("@tanstack/react-start/server");
+    const request = getWebRequest();
+    if (!request) return null;
+    const session = await auth.api.getSession({
+      headers: request.headers,
+    });
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // ── Get all published bundles (optionally filtered by locale) ─────────────────
 
@@ -16,7 +34,6 @@ export const getBundles = createServerFn()
       .where(and(eq(bundles.isPublished, true), eq(bundles.locale, locale)))
       .orderBy(asc(bundles.id));
 
-    // If no locale-specific bundles, fall back to English
     if (rows.length === 0 && locale !== "en") {
       const enRows = await d
         .select()
@@ -116,7 +133,6 @@ export const getEnrollment = createServerFn()
       .from(lessonProgress)
       .where(eq(lessonProgress.enrollmentId, enrollmentId));
 
-    // Fix: use the first module's lessons for the initial query result
     const allLessons = mods.length > 0 ? allModuleLessons[mods[0].id] || [] : [];
 
     return {
@@ -183,37 +199,22 @@ export const getQuiz = createServerFn()
     };
   });
 
-// ── Find or create user by email ─────────────────────────────────────────────
-
-export const findOrCreateUser = createServerFn()
-  .validator((email: string) => email)
-  .handler(async ({ data: email }) => {
-    const d = db();
-    const cleanEmail = email.trim().toLowerCase();
-    const [existing] = await d.select().from(users).where(eq(users.email, cleanEmail));
-    if (existing) return { ...existing, createdAt: String(existing.createdAt) };
-
-    const [created] = await d.insert(users).values({ email: cleanEmail }).returning();
-    return { ...created, createdAt: String(created.createdAt) };
-  });
-
-// ── Enroll in bundle ─────────────────────────────────────────────────────────
+// ── Enroll in bundle (auth-based) ────────────────────────────────────────────
 
 export const enrollInBundle = createServerFn()
-  .validator((input: { email: string; bundleId: number }) => input)
+  .validator((input: { bundleId: number }) => input)
   .handler(async ({ data }) => {
     const d = db();
-    const cleanEmail = data.email.trim().toLowerCase();
-    let [user] = await d.select().from(users).where(eq(users.email, cleanEmail));
-    if (!user) {
-      [user] = await d.insert(users).values({ email: cleanEmail }).returning();
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      throw new Error("You must be signed in to enroll.");
     }
 
     // Check for existing enrollment
     const [existing] = await d
       .select()
       .from(enrollments)
-      .where(and(eq(enrollments.userId, user.id), eq(enrollments.bundleId, data.bundleId)));
+      .where(and(eq(enrollments.userId, userId), eq(enrollments.bundleId, data.bundleId)));
 
     if (existing) {
       return {
@@ -225,7 +226,7 @@ export const enrollInBundle = createServerFn()
 
     const [enrollment] = await d
       .insert(enrollments)
-      .values({ userId: user.id, bundleId: data.bundleId })
+      .values({ userId, bundleId: data.bundleId })
       .returning();
 
     return {
@@ -235,12 +236,88 @@ export const enrollInBundle = createServerFn()
     };
   });
 
+// ── Get user's enrollments (for dashboard) ───────────────────────────────────
+
+export const getUserEnrollments = createServerFn().handler(async () => {
+  const d = db();
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const userEnrollments = await d
+    .select()
+    .from(enrollments)
+    .where(eq(enrollments.userId, userId))
+    .orderBy(asc(enrollments.enrolledAt));
+
+  const result = [];
+  for (const enr of userEnrollments) {
+    const [bundle] = await d.select().from(bundles).where(eq(bundles.id, enr.bundleId));
+    if (!bundle) continue;
+
+    const mods = await d
+      .select()
+      .from(modules)
+      .where(eq(modules.bundleId, enr.bundleId));
+
+    let totalLessons = 0;
+    let completedLessons = 0;
+    for (const m of mods) {
+      const ls = await d.select().from(lessons).where(eq(lessons.moduleId, m.id));
+      totalLessons += ls.length;
+      const prog = await d
+        .select()
+        .from(lessonProgress)
+        .where(
+          and(
+            eq(lessonProgress.enrollmentId, enr.id),
+            eq(lessonProgress.completed, true),
+          ),
+        );
+      completedLessons += prog.length;
+    }
+
+    const [cert] = await d
+      .select()
+      .from(certificates)
+      .where(eq(certificates.enrollmentId, enr.id));
+
+    result.push({
+      ...enr,
+      enrolledAt: String(enr.enrolledAt),
+      completedAt: enr.completedAt ? String(enr.completedAt) : null,
+      bundle: {
+        ...bundle,
+        createdAt: String(bundle.createdAt),
+      },
+      totalLessons,
+      completedLessons,
+      progressPercent: totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0,
+      hasCertificate: !!cert,
+    });
+  }
+
+  return result;
+});
+
 // ── Mark lesson complete ─────────────────────────────────────────────────────
 
 export const markLessonComplete = createServerFn()
   .validator((input: { enrollmentId: number; lessonId: number }) => input)
   .handler(async ({ data }) => {
     const d = db();
+    const userId = await getCurrentUserId();
+
+    // Verify ownership
+    if (userId) {
+      const [enr] = await d
+        .select()
+        .from(enrollments)
+        .where(eq(enrollments.id, data.enrollmentId));
+      if (!enr || enr.userId !== userId) {
+        throw new Error("You do not own this enrollment.");
+      }
+    }
+
     const [existing] = await d
       .select()
       .from(lessonProgress)
@@ -279,6 +356,19 @@ export const submitQuiz = createServerFn()
   )
   .handler(async ({ data }) => {
     const d = db();
+    const userId = await getCurrentUserId();
+
+    // Verify ownership
+    if (userId) {
+      const [enr] = await d
+        .select()
+        .from(enrollments)
+        .where(eq(enrollments.id, data.enrollmentId));
+      if (!enr || enr.userId !== userId) {
+        throw new Error("You do not own this enrollment.");
+      }
+    }
+
     const questions = await d
       .select()
       .from(quizQuestions)
@@ -528,7 +618,6 @@ export const getCertificateByCode = createServerFn()
 export const seedTranslatedBundles = createServerFn().handler(async () => {
   const d = db();
 
-  // Check if we already have a German bundle #1
   const [existingDe] = await d
     .select()
     .from(bundles)
@@ -550,7 +639,6 @@ export const seedTranslatedBundles = createServerFn().handler(async () => {
     });
   }
 
-  // Check if we already have a Spanish bundle #1
   const [existingEs] = await d
     .select()
     .from(bundles)

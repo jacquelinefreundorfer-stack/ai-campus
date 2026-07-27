@@ -9,16 +9,65 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-// ── Users ──────────────────────────────────────────────────────────────────────
+// ── Users (compatible with Better Auth) ──────────────────────────────────────
 
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  image: text("image"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// ── Bundles ────────────────────────────────────────────────────────────────────
+// ── Better Auth: Session ─────────────────────────────────────────────────────
+
+export const sessions = pgTable("session", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Better Auth: Account (stores password hash etc.) ─────────────────────────
+
+export const accounts = pgTable("account", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at"),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+  scope: text("scope"),
+  idToken: text("id_token"),
+  password: text("password"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Better Auth: Verification (email verification tokens) ───────────────────
+
+export const verifications = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Bundles ──────────────────────────────────────────────────────────────────
 
 export const bundles = pgTable("bundles", {
   id: serial("id").primaryKey(),
@@ -35,7 +84,7 @@ export const bundles = pgTable("bundles", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ── Modules ────────────────────────────────────────────────────────────────────
+// ── Modules ──────────────────────────────────────────────────────────────────
 
 export const modules = pgTable("modules", {
   id: serial("id").primaryKey(),
@@ -48,7 +97,7 @@ export const modules = pgTable("modules", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ── Lessons ────────────────────────────────────────────────────────────────────
+// ── Lessons ──────────────────────────────────────────────────────────────────
 
 export const lessons = pgTable("lessons", {
   id: serial("id").primaryKey(),
@@ -61,7 +110,7 @@ export const lessons = pgTable("lessons", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ── Quizzes ────────────────────────────────────────────────────────────────────
+// ── Quizzes ──────────────────────────────────────────────────────────────────
 
 export const quizzes = pgTable("quizzes", {
   id: serial("id").primaryKey(),
@@ -73,7 +122,7 @@ export const quizzes = pgTable("quizzes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ── Quiz Questions ─────────────────────────────────────────────────────────────
+// ── Quiz Questions ───────────────────────────────────────────────────────────
 
 export const quizQuestions = pgTable("quiz_questions", {
   id: serial("id").primaryKey(),
@@ -87,11 +136,11 @@ export const quizQuestions = pgTable("quiz_questions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ── Enrollments ────────────────────────────────────────────────────────────────
+// ── Enrollments ──────────────────────────────────────────────────────────────
 
 export const enrollments = pgTable("enrollments", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id")
+  userId: text("user_id")
     .notNull()
     .references(() => users.id),
   bundleId: integer("bundle_id")
@@ -102,7 +151,7 @@ export const enrollments = pgTable("enrollments", {
   completedAt: timestamp("completed_at"),
 });
 
-// ── Lesson Progress ────────────────────────────────────────────────────────────
+// ── Lesson Progress ──────────────────────────────────────────────────────────
 
 export const lessonProgress = pgTable("lesson_progress", {
   id: serial("id").primaryKey(),
@@ -116,7 +165,7 @@ export const lessonProgress = pgTable("lesson_progress", {
   completedAt: timestamp("completed_at"),
 });
 
-// ── Quiz Attempts ──────────────────────────────────────────────────────────────
+// ── Quiz Attempts ────────────────────────────────────────────────────────────
 
 export const quizAttempts = pgTable("quiz_attempts", {
   id: serial("id").primaryKey(),
@@ -131,14 +180,14 @@ export const quizAttempts = pgTable("quiz_attempts", {
   attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
 });
 
-// ── Certificates ───────────────────────────────────────────────────────────────
+// ── Certificates ─────────────────────────────────────────────────────────────
 
 export const certificates = pgTable("certificates", {
   id: serial("id").primaryKey(),
   enrollmentId: integer("enrollment_id")
     .notNull()
     .references(() => enrollments.id),
-  userId: integer("user_id")
+  userId: text("user_id")
     .notNull()
     .references(() => users.id),
   bundleId: integer("bundle_id")
