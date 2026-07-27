@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getQuiz, submitQuiz, getEnrollment } from "~/lib/server";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export const Route = createFileRoute("/learn/$enrollmentId/quiz/$quizId/")({
   component: QuizPage,
@@ -17,6 +17,54 @@ export const Route = createFileRoute("/learn/$enrollmentId/quiz/$quizId/")({
 });
 
 function QuizPage() {
+
+  // ── Auth guard ──────────────────────────────────────────────────────────
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) setAuthUser(data.user);
+        setAuthLoading(false);
+      })
+      .catch(() => setAuthLoading(false));
+  }, []);
+  if (authLoading) {
+    return (
+      <div className="min-h-dvh bg-cream flex items-center justify-center pt-16">
+        <div className="text-center">
+          <div className="flex h-12 w-12 items-center justify-center border-2 border-gold/40 bg-navy mx-auto mb-4">
+            <span className="font-serif text-lg font-bold text-white">AI</span>
+          </div>
+          <p className="text-gray-500 font-serif">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  if (!authUser) {
+    return (
+      <div className="min-h-dvh bg-cream pt-20">
+        <div className="max-w-lg mx-auto px-6 py-20 text-center">
+          <div className="flex h-16 w-16 items-center justify-center border-2 border-gold/40 bg-navy mx-auto mb-6">
+            <span className="font-serif text-2xl font-bold text-white">AI</span>
+          </div>
+          <h1 className="font-serif text-2xl font-bold text-navy mb-4">
+            Sign In Required
+          </h1>
+          <p className="text-gray-500 mb-8">
+            Please sign in to access this page.
+          </p>
+          <a
+            href="/"
+            className="inline-block rounded-sm bg-crimson px-8 py-3 text-sm font-medium text-white hover:bg-crimson-dark transition-all"
+          >
+            Go to Home
+          </a>
+        </div>
+      </div>
+    );
+  }
   const { quiz, enrollment } = Route.useLoaderData();
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);

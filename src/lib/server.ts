@@ -9,13 +9,14 @@ import { auth } from "~/lib/auth";
 
 async function getCurrentUserId(): Promise<string | null> {
   try {
-    // Use process-level storage — server functions run in the same request context
-    const { getWebRequest } = await import("@tanstack/react-start/server");
-    const request = getWebRequest();
-    if (!request) return null;
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
+    // Use TanStack Start's getCookie to read the Better Auth session cookie
+    const { getCookie } = await import("@tanstack/start-server-core");
+    const sessionToken = getCookie("better-auth.session_token");
+    if (!sessionToken) return null;
+
+    const headers = new Headers();
+    headers.set("cookie", `better-auth.session_token=${sessionToken}`);
+    const session = await auth.api.getSession({ headers });
     return session?.user?.id ?? null;
   } catch {
     return null;

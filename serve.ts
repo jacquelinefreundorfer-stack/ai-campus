@@ -9,6 +9,7 @@
 // with an already-running server. Every sandbox user has passwordless sudo, so
 // the takeover works across user boundaries.
 import handler from "./dist/server/server.js";
+import { handleAuthRequest } from "./auth-handler.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
 // (<label>.<PUBLIC_SITE_DOMAIN>) is reverse-proxied to 0.0.0.0:3000 inside the
@@ -41,6 +42,12 @@ for (let attempt = 1; ; attempt++) {
       hostname: HOST,
       async fetch(req) {
         const { pathname } = new URL(req.url);
+        
+        // Intercept auth API routes and handle them directly
+        if (pathname.startsWith("/api/auth/")) {
+          return handleAuthRequest(req);
+        }
+        
         if (pathname !== "/") {
           const file = Bun.file(CLIENT_DIR + pathname);
           if (await file.exists()) return new Response(file);
