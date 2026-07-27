@@ -1,6 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { useState } from "react";
-import { getBundle, getBundleModules, enrollInBundle } from "~/lib/server";
+import { useState, useEffect } from "react";
+import { getBundle, getBundleModules, createCheckoutSession, getUserEnrollments } from "~/lib/server";
 import { t } from "~/lib/i18n";
 import type { Locale } from "~/lib/i18n";
 
@@ -12,34 +11,58 @@ export function ProgramDetailPageContent({
   bundle: any;
 }) {
   const prefix = locale === "en" ? "" : `/${locale}`;
-  const [email, setEmail] = useState("");
-  const [enrollStatus, setEnrollStatus] = useState<
-    "idle" | "loading" | "success" | "enrolled"
-  >("idle");
-  const [enrollMessage, setEnrollMessage] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
+  const [error, setError] = useState("");
 
-  const handleEnroll = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.includes("@")) {
-      setEnrollStatus("idle");
-      setEnrollMessage(t(locale, "waitlist.invalidEmail"));
-      return;
-    }
-    setEnrollStatus("loading");
-    try {
-      const result = await enrollInBundle({
-        data: { email: email.trim().toLowerCase(), bundleId: bundle.id },
-      });
-      if (result.completedAt) {
-        setEnrollStatus("enrolled");
-        setEnrollMessage(t(locale, "programDetail.enrolled"));
-      } else {
-        setEnrollStatus("success");
-        setEnrollMessage(t(locale, "programDetail.enrollSuccess"));
+  // Check auth state
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            setUser(data.user);
+          }
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      setEnrollStatus("idle");
-      setEnrollMessage(t(locale, "waitlist.errorMsg"));
+      setAuthLoading(false);
+    };
+    checkAuth();
+  }, []);
+
+  // Check for existing enrollment
+  useEffect(() => {
+    if (!user || !bundle) return;
+    const checkEnrollment = async () => {
+      try {
+        const enrollments = await getUserEnrollments();
+        const existing = (enrollments as any[]).find((e: any) => e.bundleId === bundle.id);
+        if (existing) {
+          setEnrollmentId(existing.id);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkEnrollment();
+  }, [user, bundle]);
+
+  const handleEnroll = async () => {
+    setCheckoutLoading(true);
+    setError("");
+    try {
+      const result = await createCheckoutSession({ data: { bundleId: bundle.id } });
+      // Redirect to Stripe Checkout
+      window.location.href = result.url;
+    } catch (e: any) {
+      setError(e.message || "Failed to start checkout. Please try again.");
+      setCheckoutLoading(false);
     }
   };
 
@@ -136,42 +159,57 @@ export function ProgramDetailPageContent({
           </div>
         )}
 
-        {/* Enroll form */}
+        {/* Enroll section */}
         <div className="bg-white border border-gray-200 shadow-sm p-8 md:p-10">
           <h2 className="font-serif text-2xl font-bold text-navy mb-6">
             {t(locale, "programDetail.enroll")}
           </h2>
-          <form onSubmit={handleEnroll} className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t(locale, "programDetail.emailPlaceholder")}
-              className="flex-1 border border-gray-300 px-4 py-3 text-sm outline-none focus:border-gold"
-              disabled={enrollStatus === "loading" || enrollStatus === "enrolled"}
-            />
-            <button
-              type="submit"
-              disabled={enrollStatus === "loading" || enrollStatus === "enrolled"}
-              className="px-8 py-3 rounded-sm bg-crimson text-white text-sm font-medium hover:bg-crimson-dark disabled:opacity-50 transition-all whitespace-nowrap"
-            >
-              {enrollStatus === "loading"
-                ? "..."
-                : enrollStatus === "enrolled"
-                ? t(locale, "enrollment.enrolled")
-                : t(locale, "programDetail.startLearning")}
-            </button>
-          </form>
-          {enrollMessage && (
-            <p
-              className={`mt-4 text-sm ${
-                enrollStatus === "success" || enrollStatus === "enrolled"
-                  ? "text-green-700"
-                  : "text-red-600"
-              }`}
-            >
-              {enrollMessage}
-            </p>
+          {enrollmentId ? (
+            <div>
+              <p className="text-green-700 text-sm mb-4">
+                ✓ {t(locale, "programDetail.enrolled")}
+              </p>
+              <a
+                href={`/learn/${enrollmentId}/${bundle.modules?.[0]?.id ?? 1}`}
+                className="inline-block px-8 py-3 rounded-sm bg-navy text-white text-sm font-medium hover:bg-navy-light transition-all"
+              >
+                {t(locale, "programDetail.startLearning")}
+              </a>
+            </div>
+          ) : authLoading ? (
+            <div className="py-4 text-center">
+              <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+            </div>
+          ) : !user ? (
+            <div>
+              <p className="text-sm text-gray-500 mb-4">
+                {t(locale, "programDetail.signInToEnroll")}
+              </p>
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("open-auth-modal"));
+                }}
+                className="px-8 py-3 rounded-sm bg-crimson text-white text-sm font-medium hover:bg-crimson-dark transition-all"
+              >
+                {locale === "de" ? "Anmelden zum Einschreiben" : locale === "es" ? "Inicia sesión para inscribirte" : "Sign In to Enroll"}
+              </button>
+            </div>
+          ) : (
+            <div>
+              {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+              <button
+                onClick={handleEnroll}
+                disabled={checkoutLoading}
+                className="px-8 py-3 rounded-sm bg-crimson text-white text-sm font-medium hover:bg-crimson-dark disabled:opacity-50 transition-all"
+              >
+                {checkoutLoading
+                  ? (locale === "de" ? "Weiterleitung..." : locale === "es" ? "Redirigiendo..." : "Redirecting...")
+                  : (locale === "de" ? "Jetzt einschreiben" : locale === "es" ? "Inscríbete ahora" : "Enroll Now")}
+              </button>
+              <p className="mt-3 text-xs text-gray-400">
+                {locale === "de" ? "30-Tage-Geld-zurück-Garantie" : locale === "es" ? "Garantía de devolución de 30 días" : "30-day money-back guarantee"}
+              </p>
+            </div>
           )}
         </div>
       </div>

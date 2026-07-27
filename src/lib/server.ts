@@ -4,6 +4,13 @@ import { bundles, modules, lessons, quizzes, quizQuestions, users, enrollments, 
 import { eq, and, asc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "~/lib/auth";
+import {
+  getStripe,
+  getStripePriceId,
+  SITE_URL,
+  cacheCheckoutIntent,
+  getCheckoutIntent,
+} from "~/lib/stripe";
 
 // ── Auth helper: get current user from request (for server functions) ────────
 
@@ -234,6 +241,144 @@ export const enrollInBundle = createServerFn()
       ...enrollment,
       enrolledAt: String(enrollment.enrolledAt),
       completedAt: null,
+    };
+  });
+
+// ── Stripe: Create Checkout Session ──────────────────────────────────────────
+
+export const createCheckoutSession = createServerFn()
+  .validator((input: { bundleId: number }) => input)
+  .handler(async ({ data }) => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      throw new Error("You must be signed in to enroll.");
+    }
+
+    const priceId = getStripePriceId(data.bundleId);
+    const stripe = getStripe();
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: `${SITE_URL}/enroll/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${SITE_URL}/programs/${data.bundleId}`,
+      metadata: {
+        bundleId: String(data.bundleId),
+        userId,
+      },
+    });
+
+    if (!session.url) {
+      throw new Error("Failed to create checkout session.");
+    }
+
+    // Cache the checkout intent so the success page can fulfill enrollment
+    // without having to re-verify with Stripe (also serves as webhook fallback).
+    cacheCheckoutIntent(session.id, data.bundleId, userId);
+
+    return { url: session.url };
+  });
+
+// ── Stripe: Fulfill enrollment from success page ─────────────────────────────
+
+export const fulfillEnrollment = createServerFn()
+  .validator((input: { sessionId: string }) => input)
+  .handler(async ({ data }) => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      throw new Error("You must be signed in to complete enrollment.");
+    }
+
+    // First, try the cached intent (fast path — no Stripe API call needed)
+    const intent = getCheckoutIntent(data.sessionId);
+    if (intent) {
+      if (intent.userId !== userId) {
+        throw new Error("Enrollment session does not belong to this user.");
+      }
+
+      // Create the enrollment
+      const d = db();
+      const [existing] = await d
+        .select()
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.userId, userId),
+            eq(enrollments.bundleId, intent.bundleId),
+          ),
+        );
+
+      if (existing) {
+        return {
+          enrollmentId: existing.id,
+          bundleId: existing.bundleId,
+          alreadyEnrolled: true,
+        };
+      }
+
+      const [enrollment] = await d
+        .insert(enrollments)
+        .values({ userId, bundleId: intent.bundleId })
+        .returning();
+
+      return {
+        enrollmentId: enrollment.id,
+        bundleId: enrollment.bundleId,
+        alreadyEnrolled: false,
+      };
+    }
+
+    // Fallback: verify with Stripe API
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(data.sessionId);
+
+    if (session.payment_status !== "paid") {
+      throw new Error(
+        "Payment has not been completed. Please try again or contact support.",
+      );
+    }
+
+    const bundleId = parseInt(session.metadata?.bundleId ?? "0");
+    const sessionUserId = session.metadata?.userId;
+
+    if (!bundleId || !sessionUserId) {
+      throw new Error("Invalid session metadata.");
+    }
+
+    if (sessionUserId !== userId) {
+      throw new Error("Enrollment session does not belong to this user.");
+    }
+
+    const d = db();
+    const [existing] = await d
+      .select()
+      .from(enrollments)
+      .where(
+        and(eq(enrollments.userId, userId), eq(enrollments.bundleId, bundleId)),
+      );
+
+    if (existing) {
+      return {
+        enrollmentId: existing.id,
+        bundleId: existing.bundleId,
+        alreadyEnrolled: true,
+      };
+    }
+
+    const [enrollment] = await d
+      .insert(enrollments)
+      .values({ userId, bundleId })
+      .returning();
+
+    return {
+      enrollmentId: enrollment.id,
+      bundleId: enrollment.bundleId,
+      alreadyEnrolled: false,
     };
   });
 

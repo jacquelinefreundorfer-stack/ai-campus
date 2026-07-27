@@ -54,9 +54,34 @@ function RootComponent() {
 }
 
 function AppShell() {
+  const {
+    user,
+    loading,
+    authModalOpen,
+    openAuthModal,
+    closeAuthModal,
+    handleSignOut,
+    refreshSession,
+  } = useAuthState();
+
+  // Listen for custom event to open auth modal from child components
+  useEffect(() => {
+    const handler = () => openAuthModal();
+    window.addEventListener("open-auth-modal", handler);
+    return () => window.removeEventListener("open-auth-modal", handler);
+  }, [openAuthModal]);
+
   return (
     <LocaleProvider locale="en">
-      <NavBar />
+      <NavBar
+        user={user}
+        loading={loading}
+        authModalOpen={authModalOpen}
+        openAuthModal={openAuthModal}
+        closeAuthModal={closeAuthModal}
+        handleSignOut={handleSignOut}
+        refreshSession={refreshSession}
+      />
       <Outlet />
     </LocaleProvider>
   );
@@ -143,7 +168,23 @@ function useAuthState() {
 
 // ── Global Navigation Bar ─────────────────────────────────────────────────────
 
-function NavBar() {
+function NavBar({
+  user,
+  loading,
+  authModalOpen,
+  openAuthModal,
+  closeAuthModal,
+  handleSignOut,
+  refreshSession,
+}: {
+  user: SessionUser | null;
+  loading: boolean;
+  authModalOpen: boolean;
+  openAuthModal: () => void;
+  closeAuthModal: () => void;
+  handleSignOut: () => void;
+  refreshSession: () => void;
+}) {
   const prefix =
     typeof window !== "undefined"
       ? (() => {
@@ -151,16 +192,6 @@ function NavBar() {
           return locale === "en" ? "" : `/${locale}`;
         })()
       : "";
-
-  const {
-    user,
-    loading,
-    authModalOpen,
-    openAuthModal,
-    closeAuthModal,
-    handleSignOut,
-    refreshSession,
-  } = useAuthState();
 
   return (
     <>

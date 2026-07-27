@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getBundle, getBundleModules, enrollInBundle } from "~/lib/server";
-import { useState } from "react";
+import { getBundle, getBundleModules, createCheckoutSession, getUserEnrollments } from "~/lib/server";
+import { useState, useEffect } from "react";
 
 export const Route = createFileRoute("/programs/$bundleId/")({
   component: BundleDetailPage,
@@ -15,19 +15,63 @@ export const Route = createFileRoute("/programs/$bundleId/")({
 
 function BundleDetailPage() {
   const { bundle, modules } = Route.useLoaderData();
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
+  // Check auth state
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            setUser(data.user);
+          }
+        }
+      } catch {
+        // ignore
+      }
+      setAuthLoading(false);
+    };
+    checkAuth();
+  }, []);
+
+  // Check for existing enrollment
+  useEffect(() => {
+    if (!user) return;
+    const checkEnrollment = async () => {
+      try {
+        const enrollments = await getUserEnrollments();
+        const existing = (enrollments as any[]).find((e: any) => e.bundleId === bundle.id);
+        if (existing) {
+          setEnrollmentId(existing.id);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkEnrollment();
+  }, [user, bundle.id]);
+
   const handleEnroll = async () => {
-    if (!email.includes("@")) { setError("Please enter a valid email address."); return; }
-    setStatus("loading"); setError("");
+    setCheckoutLoading(true);
+    setError("");
     try {
-      const enrollment = await enrollInBundle({ data: { email: email.trim().toLowerCase(), bundleId: bundle.id } });
-      setEnrollmentId(enrollment.id); setStatus("done");
-    } catch (e: any) { setError(e.message || "Enrollment failed."); setStatus("idle"); }
+      const result = await createCheckoutSession({ data: { bundleId: bundle.id } });
+      // Redirect to Stripe Checkout
+      window.location.href = result.url;
+    } catch (e: any) {
+      setError(e.message || "Failed to start checkout. Please try again.");
+      setCheckoutLoading(false);
+    }
   };
+
+  const price = bundle.launchPriceCents ?? bundle.priceCents;
+  const originalPrice = bundle.launchPriceCents ? bundle.priceCents : null;
 
   return (
     <div className="min-h-dvh bg-cream">
@@ -59,20 +103,55 @@ function BundleDetailPage() {
           <div className="lg:col-span-1">
             <div className="bg-white border border-gray-200 p-6 sticky top-6">
               <div className="mb-4">
-                {bundle.launchPriceCents ? (
-                  <div><span className="font-serif text-3xl font-bold text-navy">${(bundle.launchPriceCents / 100).toFixed(0)} USD</span><span className="ml-2 text-gray-400 line-through">${(bundle.priceCents / 100).toFixed(0)} USD</span></div>
-                ) : <span className="font-serif text-3xl font-bold text-navy">${(bundle.priceCents / 100).toFixed(0)} USD</span>}
+                {originalPrice ? (
+                  <div>
+                    <span className="font-serif text-3xl font-bold text-navy">${(price / 100).toFixed(0)} USD</span>
+                    <span className="ml-2 text-gray-400 line-through">${(originalPrice / 100).toFixed(0)} USD</span>
+                  </div>
+                ) : (
+                  <span className="font-serif text-3xl font-bold text-navy">${(price / 100).toFixed(0)} USD</span>
+                )}
                 <p className="text-sm text-gray-500 mt-1">One-time payment · Lifetime access</p>
               </div>
-              {status === "done" && enrollmentId ? (
-                <div className="space-y-3"><p className="text-green-700 font-medium text-sm">✓ Enrolled!</p>
-                  <Link to="/learn/$enrollmentId/$moduleId" params={{ enrollmentId: String(enrollmentId), moduleId: String(modules[0]?.id ?? 1) }} className="block w-full text-center rounded-sm bg-navy px-6 py-3 text-sm font-medium text-white hover:bg-navy-light">Start Learning</Link>
+
+              {enrollmentId ? (
+                <div className="space-y-3">
+                  <p className="text-green-700 font-medium text-sm">✓ Enrolled!</p>
+                  <Link
+                    to="/learn/$enrollmentId/$moduleId"
+                    params={{ enrollmentId: String(enrollmentId), moduleId: String(modules[0]?.id ?? 1) }}
+                    className="block w-full text-center rounded-sm bg-navy px-6 py-3 text-sm font-medium text-white hover:bg-navy-light"
+                  >
+                    Start Learning
+                  </Link>
+                </div>
+              ) : authLoading ? (
+                <div className="py-8 text-center">
+                  <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+                </div>
+              ) : !user ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-500 text-center">Sign in to enroll in this program.</p>
+                  <button
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("open-auth-modal"));
+                    }}
+                    className="w-full rounded-sm bg-crimson px-6 py-3 text-sm font-medium text-white hover:bg-crimson-dark"
+                  >
+                    Sign In to Enroll
+                  </button>
+                  <p className="text-xs text-gray-400 text-center">30-day money-back guarantee</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} placeholder="your@email.com" className="w-full border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-gold" />
                   {error && <p className="text-red-600 text-xs">{error}</p>}
-                  <button onClick={handleEnroll} disabled={status === "loading"} className="w-full rounded-sm bg-crimson px-6 py-3 text-sm font-medium text-white hover:bg-crimson-dark disabled:opacity-60">{status === "loading" ? "Enrolling..." : "Enroll Now"}</button>
+                  <button
+                    onClick={handleEnroll}
+                    disabled={checkoutLoading}
+                    className="w-full rounded-sm bg-crimson px-6 py-3 text-sm font-medium text-white hover:bg-crimson-dark disabled:opacity-60"
+                  >
+                    {checkoutLoading ? "Redirecting to Checkout..." : "Enroll Now"}
+                  </button>
                   <p className="text-xs text-gray-400 text-center">30-day money-back guarantee</p>
                 </div>
               )}
