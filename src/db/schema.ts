@@ -180,6 +180,20 @@ export const quizAttempts = pgTable("quiz_attempts", {
   attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
 });
 
+// ── Blog Posts ─────────────────────────────────────────────────────────────
+
+export const blogPosts = pgTable("blog_posts", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  content: text("content").notNull(),
+  excerpt: text("excerpt"),
+  author: varchar("author", { length: 255 }).notNull().default("AI Campus"),
+  publishedAt: timestamp("published_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  isPublished: boolean("is_published").default(false).notNull(),
+});
+
 // ── Certificates ─────────────────────────────────────────────────────────────
 
 export const certificates = pgTable("certificates", {

@@ -44,6 +44,7 @@ export function LandingPage({ locale }: { locale: Locale }) {
       <Programs locale={locale} />
       <Certificates locale={locale} />
       <Trust locale={locale} />
+      <JournalTeaser locale={locale} />
       <FoundingClass locale={locale} />
       <Footer locale={locale} />
     </div>
@@ -573,6 +574,83 @@ function Trust({ locale }: { locale: Locale }) {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Section: From Our Journal ───────────────────────────────────────────
+
+function JournalTeaser({ locale }: { locale: Locale }) {
+  const prefix = locale === "en" ? "" : `/${locale}`;
+  
+  // Static teaser posts (will be replaced by DB-driven data later)
+  const posts = [
+    {
+      title: "5 AI Skills That Will Define Your Career in 2026",
+      slug: "ai-career",
+      excerpt: "From prompt engineering to AI agent orchestration, these are the competencies separating professionals who thrive from those who get left behind.",
+      date: "2026-07-20",
+    },
+    {
+      title: "How to Use AI for Marketing: A Complete Beginner's Guide",
+      slug: "ai-marketing",
+      excerpt: "Practical strategies for using AI tools to transform your marketing workflows, from content creation to customer analytics.",
+      date: "2026-07-18",
+    },
+  ];
+
+  return (
+    <section className="bg-white px-6 py-24 sm:py-32">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-16 text-center">
+          <p className="mb-3 font-serif text-sm font-medium uppercase tracking-[0.25em] text-gold">
+            From Our Journal
+          </p>
+          <h2 className="mb-5 font-serif text-3xl font-bold text-navy sm:text-4xl">
+            Insights & Articles
+          </h2>
+          <GoldDivider />
+          <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-gray-600">
+            Practical articles on AI, data science, marketing, and career growth — written by the AI Campus faculty.
+          </p>
+        </div>
+
+        <div className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
+          {posts.map((post) => (
+            <a
+              key={post.slug}
+              href={`${prefix}/blog/${post.slug}`}
+              className="group border border-gray-200 bg-white p-8 transition-all hover:border-gold/40 hover:shadow-md"
+            >
+              <p className="mb-3 text-xs font-medium uppercase tracking-widest text-gold">
+                {new Date(post.date).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+              <h3 className="mb-3 font-serif text-xl font-bold text-navy group-hover:text-navy-light transition-colors leading-snug">
+                {post.title}
+              </h3>
+              <p className="mb-5 text-sm leading-relaxed text-gray-600">
+                {post.excerpt}
+              </p>
+              <span className="inline-flex items-center gap-1 text-sm font-medium text-gold group-hover:text-navy transition-colors">
+                Read article →
+              </span>
+            </a>
+          ))}
+        </div>
+
+        <div className="mt-10 text-center">
+          <a
+            href={`${prefix}/blog`}
+            className="inline-flex items-center gap-2 rounded-sm border border-navy px-6 py-3 text-sm font-medium text-navy transition-all hover:bg-navy hover:text-white"
+          >
+            View All Articles →
+          </a>
         </div>
       </div>
     </section>

@@ -216,6 +216,12 @@ function NavBar({
               Programs
             </a>
             <a
+              href={`${prefix}/blog`}
+              className="text-sm text-gray-300 transition-colors hover:text-white"
+            >
+              Blog
+            </a>
+            <a
               href="/verify/sample"
               className="text-sm text-gray-300 transition-colors hover:text-white"
             >

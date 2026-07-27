@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "~/db/index";
-import { bundles, modules, lessons, quizzes, quizQuestions, users, enrollments, lessonProgress, quizAttempts, certificates } from "~/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { bundles, modules, lessons, quizzes, quizQuestions, users, enrollments, lessonProgress, quizAttempts, certificates, blogPosts } from "~/db/schema";
+import { eq, and, asc, desc } from "drizzle-orm";
+import { welcomeEmailTemplate, blogDigestTemplate } from "~/lib/email-templates";
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "~/lib/auth";
 import {
@@ -758,6 +759,198 @@ export const getCertificateByCode = createServerFn()
       bundle: bundle ? { title: bundle.title } : null,
     };
   });
+
+// ── Blog: Get published posts (paginated) ──────────────────────────────────
+
+export const getBlogPosts = createServerFn()
+  .validator((input?: { page?: number; limit?: number }) => input ?? {})
+  .handler(async ({ data }) => {
+    const d = db();
+    const page = data.page ?? 1;
+    const limit = data.limit ?? 10;
+    const offset = (page - 1) * limit;
+
+    const posts = await d
+      .select()
+      .from(blogPosts)
+      .where(eq(blogPosts.isPublished, true))
+      .orderBy(desc(blogPosts.publishedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const total = await d
+      .select()
+      .from(blogPosts)
+      .where(eq(blogPosts.isPublished, true));
+
+    return {
+      posts: posts.map((p) => ({
+        ...p,
+        publishedAt: String(p.publishedAt),
+        createdAt: String(p.createdAt),
+      })),
+      total: total.length,
+      page,
+      totalPages: Math.ceil(total.length / limit),
+    };
+  });
+
+// ── Blog: Get single post by slug ──────────────────────────────────────────
+
+export const getBlogPost = createServerFn()
+  .validator((slug: string) => slug)
+  .handler(async ({ data: slug }) => {
+    const d = db();
+    const [post] = await d
+      .select()
+      .from(blogPosts)
+      .where(and(eq(blogPosts.slug, slug), eq(blogPosts.isPublished, true)));
+
+    if (!post) return null;
+
+    return {
+      ...post,
+      publishedAt: String(post.publishedAt),
+      createdAt: String(post.createdAt),
+    };
+  });
+
+// ── Blog: Create a new post (admin) ────────────────────────────────────────
+
+export const createBlogPost = createServerFn()
+  .validator(
+    (input: {
+      title: string;
+      slug: string;
+      content: string;
+      excerpt?: string;
+      author?: string;
+      isPublished?: boolean;
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const d = db();
+    const [post] = await d
+      .insert(blogPosts)
+      .values({
+        title: data.title,
+        slug: data.slug,
+        content: data.content,
+        excerpt: data.excerpt || null,
+        author: data.author || "AI Campus",
+        isPublished: data.isPublished ?? false,
+      })
+      .returning();
+
+    return {
+      ...post,
+      publishedAt: String(post.publishedAt),
+      createdAt: String(post.createdAt),
+    };
+  });
+
+// ── Email: Prepare welcome email ───────────────────────────────────────────
+
+export const sendWelcomeEmail = createServerFn()
+  .validator((input: { email: string; name: string }) => input)
+  .handler(async ({ data }) => {
+    const template = welcomeEmailTemplate(data.name, data.email);
+
+    // Return the prepared email content for the lead to review/send
+    return {
+      success: true,
+      message: `Welcome email prepared for ${data.email}. The lead can send it using the sendEmail tool.`,
+      email: {
+        to: template.to,
+        subject: template.subject,
+        body: template.html,
+      },
+    };
+  });
+
+// ── Email: Prepare blog digest ─────────────────────────────────────────────
+
+export const sendBlogDigest = createServerFn()
+  .validator((input: { email: string }) => input)
+  .handler(async ({ data }) => {
+    const d = db();
+    const latestPosts = await d
+      .select({
+        title: blogPosts.title,
+        excerpt: blogPosts.excerpt,
+        slug: blogPosts.slug,
+        publishedAt: blogPosts.publishedAt,
+      })
+      .from(blogPosts)
+      .where(eq(blogPosts.isPublished, true))
+      .orderBy(desc(blogPosts.publishedAt))
+      .limit(3);
+
+    const posts = latestPosts.map((p) => ({
+      ...p,
+      publishedAt: String(p.publishedAt),
+    }));
+
+    const template = blogDigestTemplate(data.email, posts);
+
+    return {
+      success: true,
+      message: `Blog digest prepared for ${data.email} with ${posts.length} posts.`,
+      email: {
+        to: template.to,
+        subject: template.subject,
+        body: template.html,
+      },
+      postCount: posts.length,
+    };
+  });
+
+// ── Email: Prepare blog digest for all waitlisters ─────────────────────────
+
+export const sendBlogDigestToWaitlisters = createServerFn().handler(async () => {
+  const d = db();
+  const latestPosts = await d
+    .select({
+      title: blogPosts.title,
+      excerpt: blogPosts.excerpt,
+      slug: blogPosts.slug,
+      publishedAt: blogPosts.publishedAt,
+    })
+    .from(blogPosts)
+    .where(eq(blogPosts.isPublished, true))
+    .orderBy(desc(blogPosts.publishedAt))
+    .limit(3);
+
+  const posts = latestPosts.map((p) => ({
+    ...p,
+    publishedAt: String(p.publishedAt),
+  }));
+
+  // Read waitlist file
+  const { readFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+
+  let waitlistEmails: string[] = [];
+  try {
+    const raw = await readFile(join(process.cwd(), "waitlist.json"), "utf8");
+    const entries: { email: string; timestamp: string }[] = JSON.parse(raw);
+    waitlistEmails = entries.map((e) => e.email);
+  } catch {
+    waitlistEmails = [];
+  }
+
+  // Prepare preview — each email gets the digest
+  const preview = waitlistEmails.map((email) => blogDigestTemplate(email, posts));
+
+  return {
+    success: true,
+    message: `Blog digest prepared for ${waitlistEmails.length} waitlist recipients.`,
+    recipientCount: waitlistEmails.length,
+    recipients: waitlistEmails,
+    postCount: posts.length,
+    preview: preview.slice(0, 1), // Return first email as preview
+  };
+});
 
 // ── Seed translated bundles ──────────────────────────────────────────────────
 
