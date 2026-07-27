@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getBundle, getBundleModules, createCheckoutSession, getUserEnrollments } from "~/lib/server";
+import { getBundle, getBundleModules, enrollInBundle, getUserEnrollments } from "~/lib/server";
 import { t } from "~/lib/i18n";
 import type { Locale } from "~/lib/i18n";
 
@@ -13,7 +13,7 @@ export function ProgramDetailPageContent({
   const prefix = locale === "en" ? "" : `/${locale}`;
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
   const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
@@ -54,15 +54,19 @@ export function ProgramDetailPageContent({
   }, [user, bundle]);
 
   const handleEnroll = async () => {
-    setCheckoutLoading(true);
+    setEnrolling(true);
     setError("");
     try {
-      const result = await createCheckoutSession({ data: { bundleId: bundle.id } });
-      // Redirect to Stripe Checkout
-      window.location.href = result.url;
+      const result = await enrollInBundle({ data: { bundleId: bundle.id } });
+      const enrId = result.id;
+      // Get modules to find the first one
+      const mods = await getBundleModules({ data: bundle.id });
+      const firstModuleId = (mods as any[])[0]?.id ?? 1;
+      // Redirect to lesson player
+      window.location.href = `/learn/${enrId}/${firstModuleId}`;
     } catch (e: any) {
-      setError(e.message || "Failed to start checkout. Please try again.");
-      setCheckoutLoading(false);
+      setError(e.message || "Failed to enroll. Please try again.");
+      setEnrolling(false);
     }
   };
 
@@ -183,7 +187,7 @@ export function ProgramDetailPageContent({
           ) : !user ? (
             <div>
               <p className="text-sm text-gray-500 mb-4">
-                {t(locale, "programDetail.signInToEnroll")}
+                {locale === "de" ? "Melden Sie sich an, um sich einzuschreiben." : locale === "es" ? "Inicia sesión para inscribirte." : "Sign in to enroll in this program."}
               </p>
               <button
                 onClick={() => {
@@ -199,15 +203,15 @@ export function ProgramDetailPageContent({
               {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
               <button
                 onClick={handleEnroll}
-                disabled={checkoutLoading}
+                disabled={enrolling}
                 className="px-8 py-3 rounded-sm bg-crimson text-white text-sm font-medium hover:bg-crimson-dark disabled:opacity-50 transition-all"
               >
-                {checkoutLoading
-                  ? (locale === "de" ? "Weiterleitung..." : locale === "es" ? "Redirigiendo..." : "Redirecting...")
+                {enrolling
+                  ? (locale === "de" ? "Wird eingeschrieben..." : locale === "es" ? "Inscribiendo..." : "Enrolling...")
                   : (locale === "de" ? "Jetzt einschreiben" : locale === "es" ? "Inscríbete ahora" : "Enroll Now")}
               </button>
               <p className="mt-3 text-xs text-gray-400">
-                {locale === "de" ? "30-Tage-Geld-zurück-Garantie" : locale === "es" ? "Garantía de devolución de 30 días" : "30-day money-back guarantee"}
+                {locale === "de" ? "Beta-Kohorte: kostenlose Einschreibung" : locale === "es" ? "Cohorte beta: inscripción gratuita" : "Beta cohort: complimentary enrollment"}
               </p>
             </div>
           )}

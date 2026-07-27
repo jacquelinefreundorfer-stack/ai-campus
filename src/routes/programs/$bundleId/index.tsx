@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getBundle, getBundleModules, createCheckoutSession, getUserEnrollments } from "~/lib/server";
+import { getBundle, getBundleModules, enrollInBundle, getUserEnrollments } from "~/lib/server";
 import { useState, useEffect } from "react";
 
 export const Route = createFileRoute("/programs/$bundleId/")({
@@ -17,7 +17,7 @@ function BundleDetailPage() {
   const { bundle, modules } = Route.useLoaderData();
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
   const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
@@ -58,15 +58,17 @@ function BundleDetailPage() {
   }, [user, bundle.id]);
 
   const handleEnroll = async () => {
-    setCheckoutLoading(true);
+    setEnrolling(true);
     setError("");
     try {
-      const result = await createCheckoutSession({ data: { bundleId: bundle.id } });
-      // Redirect to Stripe Checkout
-      window.location.href = result.url;
+      const result = await enrollInBundle({ data: { bundleId: bundle.id } });
+      const enrId = result.id;
+      const firstModuleId = modules[0]?.id ?? 1;
+      // Redirect to lesson player
+      window.location.href = `/learn/${enrId}/${firstModuleId}`;
     } catch (e: any) {
-      setError(e.message || "Failed to start checkout. Please try again.");
-      setCheckoutLoading(false);
+      setError(e.message || "Failed to enroll. Please try again.");
+      setEnrolling(false);
     }
   };
 
@@ -140,19 +142,19 @@ function BundleDetailPage() {
                   >
                     Sign In to Enroll
                   </button>
-                  <p className="text-xs text-gray-400 text-center">30-day money-back guarantee</p>
+                  <p className="text-xs text-gray-400 text-center">Beta cohort: complimentary enrollment</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {error && <p className="text-red-600 text-xs">{error}</p>}
                   <button
                     onClick={handleEnroll}
-                    disabled={checkoutLoading}
+                    disabled={enrolling}
                     className="w-full rounded-sm bg-crimson px-6 py-3 text-sm font-medium text-white hover:bg-crimson-dark disabled:opacity-60"
                   >
-                    {checkoutLoading ? "Redirecting to Checkout..." : "Enroll Now"}
+                    {enrolling ? "Enrolling..." : "Enroll Now"}
                   </button>
-                  <p className="text-xs text-gray-400 text-center">30-day money-back guarantee</p>
+                  <p className="text-xs text-gray-400 text-center">Beta cohort: complimentary enrollment</p>
                 </div>
               )}
             </div>
