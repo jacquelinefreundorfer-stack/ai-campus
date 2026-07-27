@@ -238,6 +238,7 @@ function Experience() {
 const programs = [
   {
     id: "ai-practitioner",
+    bundleId: 1,
     title: "AI & Generative AI Practitioner",
     department: "School of Applied AI",
     description:
@@ -255,6 +256,7 @@ const programs = [
   },
   {
     id: "digital-marketing",
+    bundleId: 1,
     title: "Digital Marketing & Growth Strategy",
     department: "School of Business",
     description:
@@ -271,6 +273,7 @@ const programs = [
   },
   {
     id: "data-science",
+    bundleId: 1,
     title: "Data Science & Business Analytics",
     department: "School of Data & Technology",
     description:
@@ -365,18 +368,21 @@ function Programs() {
 
               <div className="mt-auto flex flex-col gap-3">
                 <a
-                  href="#waitlist"
+                  href="/programs"
                   className={`inline-flex w-full justify-center rounded-sm px-6 py-3 text-sm font-medium tracking-wide transition-all ${
                     program.popular
                       ? "bg-crimson text-white hover:bg-crimson-dark"
                       : "bg-navy text-white hover:bg-navy-light"
                   }`}
                 >
-                  Join Waitlist
+                  Enroll Now
                 </a>
-                <button className="inline-flex w-full justify-center rounded-sm border border-gray-300 px-6 py-3 text-sm font-medium text-gray-600 transition-all hover:border-navy hover:text-navy">
+                <a
+                  href={`/programs/${program.bundleId}`}
+                  className="inline-flex w-full justify-center rounded-sm border border-gray-300 px-6 py-3 text-sm font-medium text-gray-600 transition-all hover:border-navy hover:text-navy"
+                >
                   View Curriculum
-                </button>
+                </a>
               </div>
             </div>
           ))}
