@@ -4,20 +4,36 @@ import { bundles, modules, lessons, quizzes, quizQuestions, users, enrollments, 
 import { eq, and, asc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
-// ── Get all published bundles ────────────────────────────────────────────────
+// ── Get all published bundles (optionally filtered by locale) ─────────────────
 
-export const getBundles = createServerFn().handler(async () => {
-  const d = db();
-  const rows = await d
-    .select()
-    .from(bundles)
-    .where(eq(bundles.isPublished, true))
-    .orderBy(asc(bundles.id));
-  return rows.map((r) => ({
-    ...r,
-    createdAt: String(r.createdAt),
-  }));
-});
+export const getBundles = createServerFn()
+  .validator((locale?: string) => locale ?? "en")
+  .handler(async ({ data: locale }) => {
+    const d = db();
+    const rows = await d
+      .select()
+      .from(bundles)
+      .where(and(eq(bundles.isPublished, true), eq(bundles.locale, locale)))
+      .orderBy(asc(bundles.id));
+
+    // If no locale-specific bundles, fall back to English
+    if (rows.length === 0 && locale !== "en") {
+      const enRows = await d
+        .select()
+        .from(bundles)
+        .where(and(eq(bundles.isPublished, true), eq(bundles.locale, "en")))
+        .orderBy(asc(bundles.id));
+      return enRows.map((r) => ({
+        ...r,
+        createdAt: String(r.createdAt),
+      }));
+    }
+
+    return rows.map((r) => ({
+      ...r,
+      createdAt: String(r.createdAt),
+    }));
+  });
 
 // ── Get single bundle with modules ───────────────────────────────────────────
 
@@ -85,14 +101,6 @@ export const getEnrollment = createServerFn()
       .where(eq(modules.bundleId, enr.bundleId))
       .orderBy(asc(modules.sortOrder));
 
-    // Get progress for all lessons
-    const allLessons = await d
-      .select()
-      .from(lessons)
-      .where(
-        eq(lessons.moduleId, mods[0]?.id ?? 0)
-      );
-
     const allModuleLessons: Record<number, typeof allLessons> = {};
     for (const m of mods) {
       const ls = await d
@@ -107,6 +115,9 @@ export const getEnrollment = createServerFn()
       .select()
       .from(lessonProgress)
       .where(eq(lessonProgress.enrollmentId, enrollmentId));
+
+    // Fix: use the first module's lessons for the initial query result
+    const allLessons = mods.length > 0 ? allModuleLessons[mods[0].id] || [] : [];
 
     return {
       ...enr,
@@ -254,7 +265,6 @@ export const markLessonComplete = createServerFn()
       });
     }
 
-    // Check if certificate should be issued
     const certResult = await checkAndIssueCertificateInternal(d, data.enrollmentId);
 
     return { success: true, certificateIssued: certResult?.issued ?? false };
@@ -300,7 +310,6 @@ export const submitQuiz = createServerFn()
       passed,
     });
 
-    // Check if certificate should be issued
     const certResult = await checkAndIssueCertificateInternal(d, data.enrollmentId);
 
     return { score, passed, total: questions.length, correct, results, certificateIssued: certResult?.issued ?? false };
@@ -318,7 +327,6 @@ export const getBundleModules = createServerFn()
       .where(eq(modules.bundleId, bundleId))
       .orderBy(asc(modules.sortOrder));
 
-    // Get quizzes for each module
     const result = [];
     for (const m of mods) {
       const [quiz] = await d.select().from(quizzes).where(eq(quizzes.moduleId, m.id));
@@ -361,11 +369,9 @@ async function checkAndIssueCertificateInternal(
   d: ReturnType<typeof db>,
   enrollmentId: number,
 ): Promise<{ issued: boolean; certificate?: any } | null> {
-  // Get enrollment
   const [enr] = await d.select().from(enrollments).where(eq(enrollments.id, enrollmentId));
   if (!enr) return null;
 
-  // Check if certificate already exists
   const [existingCert] = await d
     .select()
     .from(certificates)
@@ -374,21 +380,17 @@ async function checkAndIssueCertificateInternal(
     return { issued: false, certificate: existingCert };
   }
 
-  // Get bundle
   const [bundle] = await d.select().from(bundles).where(eq(bundles.id, enr.bundleId));
   if (!bundle) return null;
 
-  // Get user
   const [user] = await d.select().from(users).where(eq(users.id, enr.userId));
   if (!user) return null;
 
-  // Get all modules for this bundle
   const mods = await d
     .select()
     .from(modules)
     .where(eq(modules.bundleId, enr.bundleId));
 
-  // Get all lessons across all modules
   let allLessons: typeof lessons.$inferSelect[] = [];
   for (const m of mods) {
     const ls = await d.select().from(lessons).where(eq(lessons.moduleId, m.id));
@@ -398,7 +400,6 @@ async function checkAndIssueCertificateInternal(
   const totalLessons = allLessons.length;
   if (totalLessons === 0) return null;
 
-  // Check all lessons are completed
   const progress = await d
     .select()
     .from(lessonProgress)
@@ -408,30 +409,24 @@ async function checkAndIssueCertificateInternal(
   const allLessonsComplete = allLessons.every((l) => completedLessonIds.has(l.id));
   if (!allLessonsComplete) return { issued: false };
 
-  // Get all quizzes and check they're passed
   let allQuizzes: typeof quizzes.$inferSelect[] = [];
   for (const m of mods) {
     const qs = await d.select().from(quizzes).where(eq(quizzes.moduleId, m.id));
     allQuizzes = [...allQuizzes, ...qs];
   }
 
-  // Get all quiz attempts for this enrollment
   const attempts = await d
     .select()
     .from(quizAttempts)
     .where(eq(quizAttempts.enrollmentId, enrollmentId));
 
-  // For each quiz, verify there's at least one passed attempt
   const allQuizzesPassed = allQuizzes.every((q) => {
     return attempts.some((a) => a.quizId === q.id && a.passed);
   });
 
   if (!allQuizzesPassed) return { issued: false };
 
-  // All requirements met — issue certificate
   const verificationCode = uuidv4();
-
-  // Build competencies list from module titles
   const competencies = mods.map((m) => m.title);
 
   const metadata = {
@@ -455,7 +450,6 @@ async function checkAndIssueCertificateInternal(
     })
     .returning();
 
-  // Update enrollment completedAt
   await d
     .update(enrollments)
     .set({ completedAt: new Date(), status: "completed" })
@@ -492,7 +486,6 @@ export const getCertificate = createServerFn()
 
     if (!cert) return null;
 
-    // Get user for name
     const [user] = await d.select().from(users).where(eq(users.id, cert.userId));
     const [bundle] = await d.select().from(bundles).where(eq(bundles.id, cert.bundleId));
 
@@ -529,3 +522,55 @@ export const getCertificateByCode = createServerFn()
       bundle: bundle ? { title: bundle.title } : null,
     };
   });
+
+// ── Seed translated bundles ──────────────────────────────────────────────────
+
+export const seedTranslatedBundles = createServerFn().handler(async () => {
+  const d = db();
+
+  // Check if we already have a German bundle #1
+  const [existingDe] = await d
+    .select()
+    .from(bundles)
+    .where(and(eq(bundles.id, 100), eq(bundles.locale, "de")));
+
+  if (!existingDe) {
+    await d.insert(bundles).values({
+      id: 100,
+      title: "AI & Generative AI Practitioner",
+      subtitle: "Ihr Weg zur KI-Kompetenz",
+      description: "Meistern Sie Prompt Engineering, KI-Agenten, benutzerdefinierte GPTs und LLM-Anwendungsentwicklung. Das essentielle KI-Kompetenzset für jeden Beruf in der modernen Wirtschaft.",
+      school: "Fakultät für Angewandte KI",
+      priceCents: 14900,
+      launchPriceCents: 7900,
+      modulesCount: 8,
+      hours: 25,
+      isPublished: true,
+      locale: "de",
+    });
+  }
+
+  // Check if we already have a Spanish bundle #1
+  const [existingEs] = await d
+    .select()
+    .from(bundles)
+    .where(and(eq(bundles.id, 200), eq(bundles.locale, "es")));
+
+  if (!existingEs) {
+    await d.insert(bundles).values({
+      id: 200,
+      title: "AI & Generative AI Practitioner",
+      subtitle: "Su camino hacia la competencia en IA",
+      description: "Domine Prompt Engineering, agentes de IA, GPTs personalizados y desarrollo de aplicaciones con LLM. El conjunto de habilidades de IA esencial para cada profesión en la economía moderna.",
+      school: "Facultad de IA Aplicada",
+      priceCents: 14900,
+      launchPriceCents: 7900,
+      modulesCount: 8,
+      hours: 25,
+      isPublished: true,
+      locale: "es",
+    });
+  }
+
+  return { success: true, message: "Translated bundles seeded" };
+});

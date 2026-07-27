@@ -2,14 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LocaleProvider } from "~/lib/LocaleContext";
 import { LandingPage } from "~/components/LandingPage";
 
-export const Route = createFileRoute("/")({
-  component: Home,
+export const Route = createFileRoute("/de/")({
+  component: DeHome,
 });
 
-function Home() {
+function DeHome() {
   return (
-    <LocaleProvider locale="en">
-      <LandingPage locale="en" />
+    <LocaleProvider locale="de">
+      <LandingPage locale="de" />
     </LocaleProvider>
   );
 }

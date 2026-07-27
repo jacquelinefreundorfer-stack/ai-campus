@@ -31,6 +31,7 @@ export const bundles = pgTable("bundles", {
   modulesCount: integer("modules_count").notNull().default(1),
   hours: integer("hours").default(1),
   isPublished: boolean("is_published").default(false).notNull(),
+  locale: varchar("locale", { length: 5 }).notNull().default("en"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

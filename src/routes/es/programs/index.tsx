@@ -3,19 +3,19 @@ import { getBundles } from "~/lib/server";
 import { LocaleProvider } from "~/lib/LocaleContext";
 import { ProgramsPageContent } from "~/components/ProgramsPage";
 
-export const Route = createFileRoute("/programs/")({
-  component: ProgramsRoute,
+export const Route = createFileRoute("/es/programs/")({
+  component: EsProgramsRoute,
   loader: async () => {
-    const bundles = await getBundles({ data: "en" });
+    const bundles = await getBundles({ data: "es" });
     return { bundles };
   },
 });
 
-function ProgramsRoute() {
+function EsProgramsRoute() {
   const { bundles } = Route.useLoaderData();
   return (
-    <LocaleProvider locale="en">
-      <ProgramsPageContent locale="en" bundles={bundles} />
+    <LocaleProvider locale="es">
+      <ProgramsPageContent locale="es" bundles={bundles} />
     </LocaleProvider>
   );
 }
