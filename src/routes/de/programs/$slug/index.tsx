@@ -5,7 +5,7 @@ import { jsonLdCourse, buildOgTags } from "~/lib/seo";
 
 const SITE_URL = "https://aicampus.ctonew.app";
 
-export const Route = createFileRoute("/de/programs/$slug")({
+export const Route = createFileRoute("/de/programs/$slug/")({
   component: BundleDetailPage,
   head: ({ loaderData }) => {
     const data = loaderData as any;
