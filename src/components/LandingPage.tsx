@@ -296,6 +296,10 @@ function Programs({ locale }: { locale: Locale }) {
               </div>
 
               <div className="mb-6">
+                <span className="mb-3 inline-block rounded-sm bg-crimson/10 px-3 py-1 font-serif text-xs font-medium uppercase tracking-wider text-crimson">
+                  {t(locale, "programs.freeDuringBeta")}
+                </span>
+                <br />
                 <span className="font-serif text-2xl font-bold text-navy">
                   ${program.launchPrice} USD
                 </span>
@@ -502,14 +506,6 @@ function Trust({ locale }: { locale: Locale }) {
     )},
   ];
 
-  const testimonials = [
-    { quoteKey: "trust.testimonial1Quote", nameKey: "trust.testimonial1Name", roleKey: "trust.testimonial1Role" },
-    { quoteKey: "trust.testimonial2Quote", nameKey: "trust.testimonial2Name", roleKey: "trust.testimonial2Role" },
-    { quoteKey: "trust.testimonial3Quote", nameKey: "trust.testimonial3Name", roleKey: "trust.testimonial3Role" },
-  ];
-
-  const partnerCompanies = ["Goldman Sachs", "Google", "McKinsey & Company", "Deloitte", "Microsoft"];
-
   return (
     <section className="bg-cream px-6 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl">
@@ -529,50 +525,24 @@ function Trust({ locale }: { locale: Locale }) {
           ))}
         </div>
 
-        <div className="mb-24 text-center">
-          <p className="mb-8 font-serif text-sm font-medium uppercase tracking-[0.25em] text-gold">
-            {t(locale, "trust.trustedBy")}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-8">
-            {partnerCompanies.map((company) => (
-              <div key={company} className="flex h-16 min-w-[140px] items-center justify-center border border-gray-200 bg-white px-6">
-                <span className="font-sans text-sm font-medium uppercase tracking-widest text-gray-400">{company}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-6 font-serif text-xs italic text-gray-400">
-            {t(locale, "trust.aspirational")}
-          </p>
-        </div>
-
-        <div className="text-center">
+        <div className="mx-auto max-w-3xl text-center">
           <p className="mb-3 font-serif text-sm font-medium uppercase tracking-[0.25em] text-gold">
-            {t(locale, "trust.testimonialsLabel")}
+            {t(locale, "trust.honestyLabel")}
           </p>
           <h2 className="mb-5 font-serif text-3xl font-bold text-navy sm:text-4xl">
-            {t(locale, "trust.testimonialsHeading")}
+            {t(locale, "trust.honestyHeading")}
           </h2>
           <GoldDivider />
-          <p className="mx-auto mt-6 mb-14 max-w-xl text-lg leading-relaxed text-gray-600">
-            {t(locale, "trust.testimonialsSubtext")}
-          </p>
-
-          <div className="grid gap-8 md:grid-cols-3">
-            {testimonials.map((tData) => (
-              <div key={tData.nameKey} className="flex flex-col bg-white p-8 text-left shadow-sm">
-                <span className="mb-4 font-serif text-5xl leading-none text-gold/30">&ldquo;</span>
-                <p className="mb-8 flex-grow leading-relaxed text-gray-600">
-                  {t(locale, tData.quoteKey)}
-                </p>
-                <div className="border-t border-gray-100 pt-5">
-                  <p className="font-serif font-semibold text-navy">{t(locale, tData.nameKey)}</p>
-                  <p className="text-sm text-gray-500">{t(locale, tData.roleKey)}</p>
-                  <span className="mt-2 inline-block font-serif text-xs italic text-gold">
-                    {t(locale, "trust.foundingStudent")}
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="mt-8 space-y-5">
+            <p className="text-lg leading-relaxed text-gray-600">
+              {t(locale, "trust.honestyText1")}
+            </p>
+            <p className="text-lg leading-relaxed text-gray-600">
+              {t(locale, "trust.honestyText2")}
+            </p>
+            <p className="text-lg leading-relaxed text-gray-600">
+              {t(locale, "trust.honestyText3")}
+            </p>
           </div>
         </div>
       </div>
@@ -702,6 +672,10 @@ function FoundingClass({ locale }: { locale: Locale }) {
 
         <p className="mb-4 text-lg leading-relaxed text-gray-300">
           {t(locale, "waitlist.body")}
+        </p>
+
+        <p className="mb-4 inline-block rounded-sm bg-crimson/20 px-4 py-2 font-serif text-base font-medium text-gold">
+          {t(locale, "waitlist.freeDuringBeta")}
         </p>
 
         <p className="mb-10 font-serif text-sm italic text-gold/80">
