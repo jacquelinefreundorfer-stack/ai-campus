@@ -5,18 +5,20 @@ import { jsonLdCourse, buildOgTags } from "~/lib/seo";
 
 const SITE_URL = "https://aicampus.ctonew.app";
 
-export const Route = createFileRoute("/programs/$slug/")({
+export const Route = createFileRoute("/programs/$slug")({
   component: BundleDetailPage,
   head: ({ loaderData }) => {
     const data = loaderData as any;
     const bundle = data?.bundle;
     if (!bundle) return { meta: [{ title: "Program — AI Campus" }] };
+
     const ogTags = buildOgTags({
       title: `${bundle.title} — AI Campus`,
       description: bundle.description || "",
       url: `${SITE_URL}/programs/${bundle.slug}`,
       type: "website",
     });
+
     return {
       meta: [
         { title: `${bundle.title} — AI Campus` },
@@ -32,8 +34,7 @@ export const Route = createFileRoute("/programs/$slug/")({
     };
   },
   loader: async ({ params }) => {
-    const slug = params.slug;
-    const bundle = await getBundleBySlug({ data: slug });
+    const bundle = await getBundleBySlug({ data: params.slug });
     if (!bundle) throw new Error("Bundle not found");
     const modulesWithLessons = await getBundleModules({ data: bundle.id });
     return { bundle, modules: modulesWithLessons };
@@ -48,31 +49,41 @@ function BundleDetailPage() {
   const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
+  // Check auth state
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const res = await fetch("/api/auth/session");
         if (res.ok) {
           const data = await res.json();
-          if (data?.user) setUser(data.user);
+          if (data?.user) {
+            setUser(data.user);
+          }
         }
-      } catch {}
+      } catch {
+        // ignore
+      }
       setAuthLoading(false);
     };
     checkAuth();
   }, []);
 
+  // Check for existing enrollment
   useEffect(() => {
-    if (!user || !bundle) return;
+    if (!user) return;
     const checkEnrollment = async () => {
       try {
         const enrollments = await getUserEnrollments();
         const existing = (enrollments as any[]).find((e: any) => e.bundleId === bundle.id);
-        if (existing) setEnrollmentId(existing.id);
-      } catch {}
+        if (existing) {
+          setEnrollmentId(existing.id);
+        }
+      } catch {
+        // ignore
+      }
     };
     checkEnrollment();
-  }, [user, bundle]);
+  }, [user, bundle.id]);
 
   const handleEnroll = async () => {
     setEnrolling(true);
@@ -80,26 +91,14 @@ function BundleDetailPage() {
     try {
       const result = await enrollInBundle({ data: { bundleId: bundle.id } });
       const enrId = result.id;
-      const firstModuleId = (modules as any[])[0]?.id ?? 1;
+      const firstModuleId = modules[0]?.id ?? 1;
+      // Redirect to lesson player
       window.location.href = `/learn/${enrId}/${firstModuleId}`;
     } catch (e: any) {
       setError(e.message || "Failed to enroll. Please try again.");
       setEnrolling(false);
     }
   };
-
-  if (!bundle) {
-    return (
-      <div className="min-h-dvh bg-cream flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="font-serif text-3xl font-bold text-navy mb-4">Program not found</h1>
-          <Link to="/programs" className="text-gold hover:underline">
-            ← All Programs
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const price = bundle.launchPriceCents ?? bundle.priceCents;
   const originalPrice = bundle.launchPriceCents ? bundle.priceCents : null;
@@ -108,26 +107,13 @@ function BundleDetailPage() {
     <div className="min-h-dvh bg-cream">
       <div className="bg-navy px-6 py-16 text-white">
         <div className="max-w-5xl mx-auto">
-          <Link to="/programs" className="text-gold/60 hover:text-gold text-sm mb-6 inline-block">
-            ← All Programs
-          </Link>
-          <p className="text-xs font-medium uppercase tracking-widest text-gold mb-2">
-            {bundle.school}
-          </p>
-          <h1 className="font-serif text-4xl font-bold sm:text-5xl mb-4">
-            {bundle.title}
-          </h1>
-          {bundle.subtitle && (
-            <p className="text-xl text-gray-300 font-serif italic">{bundle.subtitle}</p>
-          )}
-          <div className="flex flex-wrap gap-4 mt-6 text-sm text-gray-400">
-            <span>{bundle.modulesCount} modules</span>
-            <span>·</span>
-            <span>~{bundle.hours} hours</span>
-          </div>
+          <Link to="/programs" className="text-gold/60 hover:text-gold text-sm mb-6 inline-block">← All Programs</Link>
+          <p className="text-xs font-medium uppercase tracking-widest text-gold mb-2">{bundle.school}</p>
+          <h1 className="font-serif text-4xl font-bold sm:text-5xl mb-4">{bundle.title}</h1>
+          {bundle.subtitle && <p className="text-xl text-gray-300 font-serif italic">{bundle.subtitle}</p>}
+          <div className="flex flex-wrap gap-4 mt-6 text-sm text-gray-400"><span>{bundle.modulesCount} modules</span><span>·</span><span>~{bundle.hours} hours</span></div>
         </div>
       </div>
-
       <div className="max-w-5xl mx-auto px-6 py-12">
         <div className="grid gap-10 lg:grid-cols-3">
           <div className="lg:col-span-2">
@@ -135,39 +121,25 @@ function BundleDetailPage() {
             <p className="text-gray-600 leading-relaxed mb-10">{bundle.description}</p>
             <h2 className="font-serif text-2xl font-bold text-navy mb-6">Curriculum</h2>
             <div className="space-y-4">
-              {(modules as any[]).map((mod: any) => (
+              {modules.map((mod: any) => (
                 <div key={mod.id} className="bg-white border border-gray-200 p-5">
-                  <h3 className="font-serif text-lg font-semibold text-navy">
-                    Module {mod.sortOrder}: {mod.title}
-                  </h3>
-                  {mod.description && (
-                    <p className="text-sm text-gray-500 mt-1">{mod.description}</p>
-                  )}
-                  <div className="mt-2 text-xs text-gray-400">
-                    {mod.lessons?.length ?? 0} lessons
-                    {mod.quizId && <span> · Quiz included</span>}
-                  </div>
+                  <h3 className="font-serif text-lg font-semibold text-navy">Module {mod.sortOrder}: {mod.title}</h3>
+                  {mod.description && <p className="text-sm text-gray-500 mt-1">{mod.description}</p>}
+                  <div className="mt-2 text-xs text-gray-400">{mod.lessons.length} lessons{mod.quizId && <span> · Quiz included</span>}</div>
                 </div>
               ))}
             </div>
           </div>
-
           <div className="lg:col-span-1">
             <div className="bg-white border border-gray-200 p-6 sticky top-6">
               <div className="mb-4">
                 {originalPrice ? (
                   <div>
-                    <span className="font-serif text-3xl font-bold text-navy">
-                      ${(price / 100).toFixed(0)} USD
-                    </span>
-                    <span className="ml-2 text-gray-400 line-through">
-                      ${(originalPrice / 100).toFixed(0)} USD
-                    </span>
+                    <span className="font-serif text-3xl font-bold text-navy">${(price / 100).toFixed(0)} USD</span>
+                    <span className="ml-2 text-gray-400 line-through">${(originalPrice / 100).toFixed(0)} USD</span>
                   </div>
                 ) : (
-                  <span className="font-serif text-3xl font-bold text-navy">
-                    ${(price / 100).toFixed(0)} USD
-                  </span>
+                  <span className="font-serif text-3xl font-bold text-navy">${(price / 100).toFixed(0)} USD</span>
                 )}
                 <p className="text-sm text-gray-500 mt-1">One-time payment · Lifetime access</p>
               </div>
@@ -176,7 +148,7 @@ function BundleDetailPage() {
                   <p className="text-green-700 font-medium text-sm">✓ Enrolled!</p>
                   <Link
                     to="/learn/$enrollmentId/$moduleId"
-                    params={{ enrollmentId: String(enrollmentId), moduleId: String((modules as any[])[0]?.id ?? 1) }}
+                    params={{ enrollmentId: String(enrollmentId), moduleId: String(modules[0]?.id ?? 1) }}
                     className="block w-full text-center rounded-sm bg-navy px-6 py-3 text-sm font-medium text-white hover:bg-navy-light"
                   >
                     Start Learning
@@ -190,7 +162,9 @@ function BundleDetailPage() {
                 <div className="space-y-3">
                   <p className="text-sm text-gray-500 text-center">Sign in to enroll in this program.</p>
                   <button
-                    onClick={() => window.dispatchEvent(new CustomEvent("open-auth-modal"))}
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("open-auth-modal"));
+                    }}
                     className="w-full rounded-sm bg-crimson px-6 py-3 text-sm font-medium text-white hover:bg-crimson-dark"
                   >
                     Sign In to Enroll
