@@ -1,9 +1,38 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getBundle, getBundleModules, enrollInBundle, getUserEnrollments } from "~/lib/server";
 import { useState, useEffect } from "react";
+import { jsonLdCourse, buildOgTags } from "~/lib/seo";
+
+const SITE_URL = "https://aicampus.ctonew.app";
 
 export const Route = createFileRoute("/programs/$bundleId/")({
   component: BundleDetailPage,
+  head: ({ loaderData }) => {
+    const data = loaderData as any;
+    const bundle = data?.bundle;
+    if (!bundle) return { meta: [{ title: "Program — AI Campus" }] };
+
+    const ogTags = buildOgTags({
+      title: `${bundle.title} — AI Campus`,
+      description: bundle.description || "",
+      url: `${SITE_URL}/programs/${bundle.id}`,
+      type: "website",
+    });
+
+    return {
+      meta: [
+        { title: `${bundle.title} — AI Campus` },
+        { name: "description", content: bundle.description || "" },
+        ...ogTags,
+      ],
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: JSON.stringify(jsonLdCourse(bundle)),
+        },
+      ],
+    };
+  },
   loader: async ({ params }) => {
     const id = parseInt(params.bundleId);
     const bundle = await getBundle({ data: id });
@@ -12,7 +41,6 @@ export const Route = createFileRoute("/programs/$bundleId/")({
     return { bundle, modules: modulesWithLessons };
   },
 });
-
 function BundleDetailPage() {
   const { bundle, modules } = Route.useLoaderData();
   const [user, setUser] = useState<any>(null);
@@ -20,7 +48,6 @@ function BundleDetailPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [enrollmentId, setEnrollmentId] = useState<number | null>(null);
   const [error, setError] = useState("");
-
   // Check auth state
   useEffect(() => {
     const checkAuth = async () => {
@@ -39,7 +66,6 @@ function BundleDetailPage() {
     };
     checkAuth();
   }, []);
-
   // Check for existing enrollment
   useEffect(() => {
     if (!user) return;
@@ -56,7 +82,6 @@ function BundleDetailPage() {
     };
     checkEnrollment();
   }, [user, bundle.id]);
-
   const handleEnroll = async () => {
     setEnrolling(true);
     setError("");
@@ -71,10 +96,8 @@ function BundleDetailPage() {
       setEnrolling(false);
     }
   };
-
   const price = bundle.launchPriceCents ?? bundle.priceCents;
   const originalPrice = bundle.launchPriceCents ? bundle.priceCents : null;
-
   return (
     <div className="min-h-dvh bg-cream">
       <div className="bg-navy px-6 py-16 text-white">
@@ -115,7 +138,6 @@ function BundleDetailPage() {
                 )}
                 <p className="text-sm text-gray-500 mt-1">One-time payment · Lifetime access</p>
               </div>
-
               {enrollmentId ? (
                 <div className="space-y-3">
                   <p className="text-green-700 font-medium text-sm">✓ Enrolled!</p>

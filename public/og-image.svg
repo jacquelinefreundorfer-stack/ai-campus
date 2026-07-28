@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#111d35"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <!-- Gold accent line top -->
+  <rect x="80" y="60" width="1040" height="3" fill="#c4a44a" opacity="0.5"/>
+  <!-- AI Campus logo square -->
+  <rect x="80" y="100" width="64" height="64" fill="none" stroke="#c4a44a" stroke-width="2" opacity="0.7"/>
+  <text x="112" y="147" font-family="Georgia, 'Times New Roman', serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">AI</text>
+  <!-- Title -->
+  <text x="80" y="240" font-family="Georgia, 'Times New Roman', serif" font-size="56" font-weight="bold" fill="#ffffff">AI Campus</text>
+  <!-- Subtitle -->
+  <text x="80" y="300" font-family="Inter, system-ui, sans-serif" font-size="24" fill="#c4a44a" font-weight="500">An Online University for the Age of Artificial Intelligence</text>
+  <!-- Description -->
+  <text x="80" y="370" font-family="Inter, system-ui, sans-serif" font-size="18" fill="#8a9bb5">Rigorous online programs in AI, data science, and digital marketing.</text>
+  <text x="80" y="400" font-family="Inter, system-ui, sans-serif" font-size="18" fill="#8a9bb5">Earn verifiable digital certificates from a prestigious online institution.</text>
+  <!-- Gold accent line bottom -->
+  <rect x="80" y="460" width="1040" height="2" fill="#c4a44a" opacity="0.3"/>
+  <!-- URL -->
+  <text x="80" y="540" font-family="Inter, system-ui, sans-serif" font-size="16" fill="#8a9bb5">aicampus.ctonew.app</text>
+</svg>

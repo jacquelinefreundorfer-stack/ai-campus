@@ -10,22 +10,36 @@ import { detectLocale } from "~/lib/i18n";
 import { LanguageSwitcher } from "~/components/LanguageSwitcher";
 import { LocaleProvider } from "~/lib/LocaleContext";
 import { AuthModal } from "~/components/AuthModal";
+import { jsonLdOrganization } from "~/lib/seo";
 
 import appCss from "~/styles/app.css?url";
+
+const SITE_URL = "https://aicampus.ctonew.app";
+const OG_IMAGE = `${SITE_URL}/og-image.svg`;
+const SITE_TITLE = "AI Campus — An Online University for the Age of AI";
+const SITE_DESC =
+  "AI Campus offers rigorous online programs in AI, data science, digital marketing, and more. Earn verifiable digital certificates from a prestigious online institution.";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      {
-        title: "AI Campus — An Online University for the Age of AI",
-      },
-      {
-        name: "description",
-        content:
-          "AI Campus offers rigorous online programs in AI, data science, digital marketing, and more. Earn verifiable digital certificates from a prestigious online institution.",
-      },
+      { title: SITE_TITLE },
+      { name: "description", content: SITE_DESC },
+      // Open Graph
+      { property: "og:title", content: SITE_TITLE },
+      { property: "og:description", content: SITE_DESC },
+      { property: "og:image", content: OG_IMAGE },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "AI Campus" },
+      { property: "og:locale", content: "en_US" },
+      // Twitter Card
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: SITE_TITLE },
+      { name: "twitter:description", content: SITE_DESC },
+      { name: "twitter:image", content: OG_IMAGE },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -40,8 +54,14 @@ export const Route = createRootRoute({
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap",
       },
     ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify(jsonLdOrganization()),
+      },
+    ],
   }),
-  notFoundComponent: () => <div>Page not found</div>,
+  notFoundComponent: () => <NotFoundPage />,
   component: RootComponent,
 });
 
@@ -103,6 +123,75 @@ function RootDocument({ children }: { children: ReactNode }) {
         <Scripts />
       </body>
     </html>
+  );
+}
+
+// ── 404 Page ──────────────────────────────────────────────────────────────────
+
+function NotFoundPage() {
+  return (
+    <div className="min-h-dvh bg-cream">
+      {/* Hero */}
+      <div className="bg-navy px-6 py-20 text-white">
+        <div className="max-w-5xl mx-auto text-center">
+          <p className="text-xs font-medium uppercase tracking-widest text-gold mb-4">
+            404
+          </p>
+          <h1 className="font-serif text-4xl font-bold sm:text-5xl mb-4">
+            Page Not Found
+          </h1>
+          <p className="text-lg text-gray-300 max-w-2xl mx-auto">
+            The page you are looking for does not exist or has been moved.
+            Please check the URL or return to the homepage.
+          </p>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="max-w-3xl mx-auto px-6 py-16 text-center">
+        <p className="text-gray-500 font-serif text-lg mb-8">
+          Here are some helpful links to get you back on track:
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3 max-w-lg mx-auto">
+          <a
+            href="/"
+            className="rounded-sm border border-navy/20 bg-white px-6 py-3 text-sm font-medium text-navy transition-all hover:border-gold/40 hover:bg-gold-pale hover:shadow-sm"
+          >
+            Home
+          </a>
+          <a
+            href="/programs"
+            className="rounded-sm border border-navy/20 bg-white px-6 py-3 text-sm font-medium text-navy transition-all hover:border-gold/40 hover:bg-gold-pale hover:shadow-sm"
+          >
+            Programs
+          </a>
+          <a
+            href="/blog"
+            className="rounded-sm border border-navy/20 bg-white px-6 py-3 text-sm font-medium text-navy transition-all hover:border-gold/40 hover:bg-gold-pale hover:shadow-sm"
+          >
+            Blog
+          </a>
+        </div>
+      </div>
+
+      {/* Footer CTA */}
+      <div className="bg-navy px-6 py-16 text-center">
+        <div className="max-w-2xl mx-auto">
+          <p className="text-gold font-serif text-lg mb-4">
+            Looking for something specific?
+          </p>
+          <h2 className="font-serif text-2xl font-bold text-white mb-4">
+            Explore our programs or browse the journal
+          </h2>
+          <a
+            href="/"
+            className="inline-flex items-center gap-2 rounded-sm bg-crimson px-8 py-3.5 text-base font-medium text-white transition-all hover:bg-crimson-dark"
+          >
+            Return to AI Campus Home
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 

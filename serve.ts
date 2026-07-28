@@ -47,6 +47,7 @@ for (let attempt = 1; ; attempt++) {
         if (pathname.startsWith("/api/auth/")) {
           return handleAuthRequest(req);
         }
+
         
         if (pathname !== "/") {
           const file = Bun.file(CLIENT_DIR + pathname);
