@@ -72,6 +72,7 @@ export const verifications = pgTable("verification", {
 export const bundles = pgTable("bundles", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
   subtitle: varchar("subtitle", { length: 255 }),
   description: text("description").notNull(),
   school: varchar("school", { length: 255 }).notNull().default("School of Applied AI"),

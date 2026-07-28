@@ -86,6 +86,31 @@ export const getBundle = createServerFn()
     };
   });
 
+// ── Get single bundle by slug with modules ───────────────────────────────
+
+export const getBundleBySlug = createServerFn()
+  .validator((slug: string) => slug)
+  .handler(async ({ data: slug }) => {
+    const d = db();
+    const [bundle] = await d.select().from(bundles).where(eq(bundles.slug, slug));
+    if (!bundle) return null;
+
+    const mods = await d
+      .select()
+      .from(modules)
+      .where(eq(modules.bundleId, bundle.id))
+      .orderBy(asc(modules.sortOrder));
+
+    return {
+      ...bundle,
+      createdAt: String(bundle.createdAt),
+      modules: mods.map((m) => ({
+        ...m,
+        createdAt: String(m.createdAt),
+      })),
+    };
+  });
+
 // ── Get module with lessons ──────────────────────────────────────────────────
 
 export const getModuleWithLessons = createServerFn()
@@ -966,6 +991,7 @@ export const seedTranslatedBundles = createServerFn().handler(async () => {
     await d.insert(bundles).values({
       id: 100,
       title: "AI & Generative AI Practitioner",
+      slug: "ai-practitioner-de",
       subtitle: "Ihr Weg zur KI-Kompetenz",
       description: "Meistern Sie Prompt Engineering, KI-Agenten, benutzerdefinierte GPTs und LLM-Anwendungsentwicklung. Das essentielle KI-Kompetenzset für jeden Beruf in der modernen Wirtschaft.",
       school: "Fakultät für Angewandte KI",
@@ -987,6 +1013,7 @@ export const seedTranslatedBundles = createServerFn().handler(async () => {
     await d.insert(bundles).values({
       id: 200,
       title: "AI & Generative AI Practitioner",
+      slug: "ai-practitioner-es",
       subtitle: "Su camino hacia la competencia en IA",
       description: "Domine Prompt Engineering, agentes de IA, GPTs personalizados y desarrollo de aplicaciones con LLM. El conjunto de habilidades de IA esencial para cada profesión en la economía moderna.",
       school: "Facultad de IA Aplicada",

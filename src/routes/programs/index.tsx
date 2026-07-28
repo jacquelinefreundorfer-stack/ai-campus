@@ -44,8 +44,8 @@ function ProgramsListingPage() {
             {bundles.map((bundle: any) => (
               <Link
                 key={bundle.id}
-                to="/programs/$bundleId"
-                params={{ bundleId: String(bundle.id) }}
+                to="/programs/$slug"
+                params={{ slug: bundle.slug }}
                 className="group bg-white border border-gray-200 hover:border-gold/40 hover:shadow-lg transition-all"
               >
                 <div className="p-6">

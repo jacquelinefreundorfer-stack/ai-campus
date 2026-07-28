@@ -1,22 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getBundle } from "~/lib/server";
-import { LocaleProvider } from "~/lib/LocaleContext";
-import { ProgramDetailPageContent } from "~/components/ProgramDetailPage";
 
 export const Route = createFileRoute("/es/programs/$bundleId/")({
-  component: EsProgramDetailRoute,
   loader: async ({ params }) => {
     const bundleId = parseInt(params.bundleId);
+    if (isNaN(bundleId)) {
+      throw redirect({ to: "/es/programs" });
+    }
     const bundle = await getBundle({ data: bundleId });
-    return { bundle };
+    if (!bundle || !bundle.slug) {
+      throw redirect({ to: "/es/programs" });
+    }
+    throw redirect({ to: "/es/programs/$slug", params: { slug: bundle.slug } });
   },
+  component: () => null,
 });
-
-function EsProgramDetailRoute() {
-  const { bundle } = Route.useLoaderData();
-  return (
-    <LocaleProvider locale="es">
-      <ProgramDetailPageContent locale="es" bundle={bundle} />
-    </LocaleProvider>
-  );
-}

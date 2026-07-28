@@ -95,7 +95,7 @@ export function ProgramsPageContent({
                   </span>
                 )}
                 <a
-                  href={`${prefix}/programs/${bundle.id}`}
+                  href={`${prefix}/programs/${bundle.slug}`}
                   className="w-full inline-flex justify-center rounded-sm bg-crimson px-6 py-3 text-sm font-medium text-white hover:bg-crimson-dark transition-all"
                 >
                   {t(locale, "programsPage.viewProgram")}

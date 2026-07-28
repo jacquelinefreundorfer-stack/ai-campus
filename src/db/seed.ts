@@ -22,6 +22,7 @@ async function seed() {
     .insert(bundles)
     .values({
       title: "AI & Generative AI Practitioner",
+      slug: "ai-practitioner",
       subtitle: "Master the essential AI skillset for the modern economy",
       description:
         "A comprehensive program covering prompt engineering, AI agents, custom GPTs, LLM application development, RAG, AI ethics, and building production AI tools. Designed for professionals who want to leverage AI in their daily work and build intelligent applications.",

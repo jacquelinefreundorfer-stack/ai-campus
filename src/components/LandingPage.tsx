@@ -194,7 +194,7 @@ function Programs({ locale }: { locale: Locale }) {
   const programs = [
     {
       id: "ai-practitioner",
-      bundleId: 1,
+      slug: "ai-practitioner",
       deptKey: "programs.course1Dept",
       titleKey: "programs.course1Title",
       descKey: "programs.course1Desc",
@@ -206,7 +206,7 @@ function Programs({ locale }: { locale: Locale }) {
     },
     {
       id: "digital-marketing",
-      bundleId: 1,
+      slug: "digital-marketing",
       deptKey: "programs.course2Dept",
       titleKey: "programs.course2Title",
       descKey: "programs.course2Desc",
@@ -218,7 +218,7 @@ function Programs({ locale }: { locale: Locale }) {
     },
     {
       id: "data-science",
-      bundleId: 1,
+      slug: "data-science",
       deptKey: "programs.course3Dept",
       titleKey: "programs.course3Title",
       descKey: "programs.course3Desc",
@@ -320,7 +320,7 @@ function Programs({ locale }: { locale: Locale }) {
                   {t(locale, "programs.enrollNow")}
                 </a>
                 <a
-                  href={`${prefix}/programs/${program.bundleId}`}
+                  href={`${prefix}/programs/${program.slug}`}
                   className="inline-flex w-full justify-center rounded-sm border border-gray-300 px-6 py-3 text-sm font-medium text-gray-600 transition-all hover:border-navy hover:text-navy"
                 >
                   {t(locale, "programs.viewCurriculum")}

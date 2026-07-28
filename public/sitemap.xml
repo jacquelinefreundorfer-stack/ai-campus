@@ -11,6 +11,21 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://aicampus.ctonew.app/programs/ai-practitioner</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://aicampus.ctonew.app/programs/digital-marketing</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://aicampus.ctonew.app/programs/data-science</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>https://aicampus.ctonew.app/blog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
